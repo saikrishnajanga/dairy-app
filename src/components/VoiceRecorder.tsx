@@ -7,7 +7,8 @@ interface Props {
 export default function VoiceRecorder({ onSave }: Props) {
   const {
     isListening, teluguText, romanizedText, interimText,
-    error, startListening, stopListening, resetTranscript,
+    error, needsPermission, startListening, stopListening,
+    resetTranscript, requestPermission,
   } = useSpeechToText()
 
   const handleToggle = () => {
@@ -52,6 +53,13 @@ export default function VoiceRecorder({ onSave }: Props) {
       </div>
 
       {error && <div className="error-box">⚠️ {error}</div>}
+
+      {/* Grant Permission Button — shown when mic permission denied */}
+      {needsPermission && (
+        <button className="permission-btn" onClick={requestPermission}>
+          🎤 Grant Microphone Permission
+        </button>
+      )}
 
       {(hasContent || isListening) && (
         <div className="preview">
