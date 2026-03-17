@@ -23,10 +23,19 @@ export function useSpeechToText() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const accumulatedRef = useRef('');
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       setState(p => ({ ...p, error: 'Speech recognition not supported. Use Chrome or Edge.' }));
+      return;
+    }
+
+    // Request microphone permission (triggers Android permission dialog)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop()); // Release immediately, just need the permission
+    } catch {
+      setState(p => ({ ...p, error: 'Microphone access denied. Please allow microphone permission in app settings.' }));
       return;
     }
 
