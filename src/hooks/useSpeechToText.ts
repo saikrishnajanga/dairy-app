@@ -1,5 +1,28 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { transliterate } from '../services/transliterator';
+import { Capacitor } from '@capacitor/core';
+
+// Dynamic import for native speech recognition
+let SpeechRecognitionPlugin: any = null;
+
+async function loadNativePlugin() {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const mod = await import('@capacitor-community/speech-recognition');
+      SpeechRecognitionPlugin = mod.SpeechRecognition;
+      // Request permission on native
+      const { permission } = await SpeechRecognitionPlugin.checkPermissions();
+      if (permission !== 'granted') {
+        await SpeechRecognitionPlugin.requestPermissions();
+      }
+    } catch (e) {
+      console.warn('Native speech plugin not available:', e);
+    }
+  }
+}
+
+// Load plugin on import
+loadNativePlugin();
 
 interface SpeechState {
   isListening: boolean;
@@ -17,25 +40,93 @@ export function useSpeechToText() {
     romanizedText: '',
     interimText: '',
     error: null,
-    isSupported: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+    isSupported: true,
   });
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const accumulatedRef = useRef('');
 
-  const startListening = useCallback(async () => {
+  // ─── Native (Android/iOS) speech recognition ───
+  const startNativeListening = useCallback(async () => {
+    if (!SpeechRecognitionPlugin) {
+      setState(p => ({ ...p, error: 'Speech plugin not loaded. Please restart the app.' }));
+      return;
+    }
+
+    try {
+      const { permission } = await SpeechRecognitionPlugin.checkPermissions();
+      if (permission !== 'granted') {
+        const res = await SpeechRecognitionPlugin.requestPermissions();
+        if (res.permission !== 'granted') {
+          setState(p => ({ ...p, error: 'Microphone permission denied. Go to Settings → App → Permissions.' }));
+          return;
+        }
+      }
+
+      setState(p => ({ ...p, isListening: true, error: null }));
+
+      // Listen for partial results
+      SpeechRecognitionPlugin.addListener('partialResults', (data: any) => {
+        const text = data.matches?.[0] || data.value || '';
+        if (text) {
+          setState(p => ({
+            ...p,
+            interimText: transliterate(text),
+            teluguText: text,
+          }));
+        }
+      });
+
+      await SpeechRecognitionPlugin.start({
+        language: 'te-IN',
+        maxResults: 5,
+        prompt: 'Speak in Telugu...',
+        partialResults: true,
+        popup: false,
+      });
+
+      // Listen for final results
+      SpeechRecognitionPlugin.addListener('results', (data: any) => {
+        const text = data.matches?.[0] || '';
+        const accumulated = accumulatedRef.current ? accumulatedRef.current + ' ' + text : text;
+        accumulatedRef.current = accumulated;
+        setState(p => ({
+          ...p,
+          teluguText: accumulated,
+          romanizedText: transliterate(accumulated),
+          interimText: '',
+          isListening: false,
+        }));
+        SpeechRecognitionPlugin.removeAllListeners();
+      });
+
+    } catch (e: any) {
+      setState(p => ({ ...p, error: `Speech error: ${e.message || e}`, isListening: false }));
+    }
+  }, []);
+
+  const stopNativeListening = useCallback(async () => {
+    try {
+      await SpeechRecognitionPlugin?.stop();
+      SpeechRecognitionPlugin?.removeAllListeners();
+    } catch { /* ignore */ }
+    setState(p => ({ ...p, isListening: false }));
+  }, []);
+
+  // ─── Web (Browser) speech recognition ───
+  const startWebListening = useCallback(async () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       setState(p => ({ ...p, error: 'Speech recognition not supported. Use Chrome or Edge.' }));
       return;
     }
 
-    // Request microphone permission (triggers Android permission dialog)
+    // Request mic permission
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => t.stop()); // Release immediately, just need the permission
+      stream.getTracks().forEach(t => t.stop());
     } catch {
-      setState(p => ({ ...p, error: 'Microphone access denied. Please allow microphone permission in app settings.' }));
+      setState(p => ({ ...p, error: 'Microphone access denied.' }));
       return;
     }
 
@@ -68,9 +159,9 @@ export function useSpeechToText() {
 
       rec.onerror = (e: SpeechRecognitionErrorEvent) => {
         const msgs: Record<string, string> = {
-          'not-allowed': 'Microphone access denied. Please allow microphone.',
+          'not-allowed': 'Microphone access denied.',
           'no-speech': 'No speech detected. Try again.',
-          'network': 'Network error. Check internet connection.',
+          'network': 'Network error. Check internet.',
           'audio-capture': 'No microphone found.',
         };
         setState(p => ({ ...p, error: msgs[e.error] || `Error: ${e.error}`, isListening: false }));
@@ -85,18 +176,34 @@ export function useSpeechToText() {
     }
   }, []);
 
-  const stopListening = useCallback(() => {
+  const stopWebListening = useCallback(() => {
     recognitionRef.current?.stop();
     recognitionRef.current = null;
     setState(p => ({ ...p, isListening: false }));
   }, []);
+
+  // ─── Unified API ───
+  const isNative = Capacitor.isNativePlatform();
+
+  const startListening = useCallback(async () => {
+    if (isNative) await startNativeListening();
+    else await startWebListening();
+  }, [isNative, startNativeListening, startWebListening]);
+
+  const stopListening = useCallback(() => {
+    if (isNative) stopNativeListening();
+    else stopWebListening();
+  }, [isNative, stopNativeListening, stopWebListening]);
 
   const resetTranscript = useCallback(() => {
     accumulatedRef.current = '';
     setState(p => ({ ...p, teluguText: '', romanizedText: '', interimText: '', error: null }));
   }, []);
 
-  useEffect(() => () => { recognitionRef.current?.abort(); }, []);
+  useEffect(() => () => {
+    recognitionRef.current?.abort();
+    if (isNative) SpeechRecognitionPlugin?.removeAllListeners();
+  }, [isNative]);
 
   return { ...state, startListening, stopListening, resetTranscript };
 }

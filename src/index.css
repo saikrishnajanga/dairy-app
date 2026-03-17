@@ -1335,3 +1335,132 @@ body {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   PIN Modal
+   ═══════════════════════════════════════════════════════════ */
+
+.pin-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+.pin-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 28px 24px;
+  width: min(360px, 90vw);
+  box-shadow: 0 16px 48px var(--shadow);
+}
+
+.pin-modal h3 {
+  text-align: center;
+  margin-bottom: 16px;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.pin-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  text-align: center;
+  letter-spacing: 8px;
+  outline: none;
+  margin-bottom: 10px;
+}
+
+.pin-input:focus {
+  border-color: var(--primary);
+}
+
+.pin-error {
+  text-align: center;
+  color: var(--danger);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.pin-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pin-cancel {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pin-submit {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ─── Enhanced Toolbar ──────────────────────────────────── */
+
+.tool-select {
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+}
+
+.tool-color {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+  padding: 1px;
+}
+
+.tool-color::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.tool-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.rich-editor blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 14px;
+  margin: 10px 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}

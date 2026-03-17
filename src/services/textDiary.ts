@@ -1,16 +1,18 @@
-// Text Diary storage service
+// Text Diary storage service with lock support
 
 export interface TextDiaryEntry {
   id: string;
   title: string;
-  content: string; // HTML content for rich text
+  content: string;
   timestamp: number;
   date: string;
   time: string;
   lastEdited: number;
+  locked: boolean;
 }
 
 const DIARY_KEY = 'vd_text_diary';
+const PIN_KEY = 'vd_diary_pin';
 
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -33,7 +35,7 @@ export function createTextEntry(title: string, content: string): TextDiaryEntry 
   const ts = Date.now();
   const entry: TextDiaryEntry = {
     id: genId(), title, content, timestamp: ts,
-    date: fmtDate(ts), time: fmtTime(ts), lastEdited: ts,
+    date: fmtDate(ts), time: fmtTime(ts), lastEdited: ts, locked: false,
   };
   const all = readAll();
   all.unshift(entry);
@@ -47,7 +49,7 @@ export function getTextEntry(id: string): TextDiaryEntry | undefined {
   return readAll().find(e => e.id === id);
 }
 
-export function updateTextEntry(id: string, updates: Partial<Pick<TextDiaryEntry, 'title' | 'content'>>) {
+export function updateTextEntry(id: string, updates: Partial<Pick<TextDiaryEntry, 'title' | 'content' | 'locked'>>) {
   const all = readAll();
   const idx = all.findIndex(e => e.id === id);
   if (idx >= 0) {
@@ -69,8 +71,21 @@ export function searchTextEntries(query: string): TextDiaryEntry[] {
   );
 }
 
-export function exportTextEntries(): string {
-  return readAll()
-    .map(e => `# ${e.title}\n[${e.date} ${e.time}]\n\n${e.content.replace(/<[^>]*>/g, '')}\n`)
-    .join('\n---\n\n');
+// PIN/Password management
+export function setDiaryPin(pin: string) {
+  localStorage.setItem(PIN_KEY, btoa(pin));
+}
+
+export function getDiaryPin(): string | null {
+  const stored = localStorage.getItem(PIN_KEY);
+  if (!stored) return null;
+  try { return atob(stored); } catch { return null; }
+}
+
+export function verifyPin(pin: string): boolean {
+  return getDiaryPin() === pin;
+}
+
+export function hasPinSet(): boolean {
+  return !!localStorage.getItem(PIN_KEY);
 }
