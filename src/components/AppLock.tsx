@@ -64,7 +64,7 @@ export default function AppLock({ children }: AppLockProps) {
   return (
     <div className="lock-screen">
       <div className="lock-container">
-        <div className="lock-icon">🔒</div>
+        <img src="/logo.png" alt="VoiceDiary Logo" className="lock-logo" />
         <h2 className="lock-title">VoiceDiary Pro</h2>
         <p className="lock-subtitle">
           {mode === 'setup' ? 'Set up your app PIN' : 'Enter PIN to unlock'}

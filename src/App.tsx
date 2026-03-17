@@ -89,9 +89,12 @@ export default function App() {
     <div className="app">
       {/* Header */}
       <header className="app-header">
-        <div>
-          <div className="app-title">VoiceDiary Pro</div>
-          <div className="app-subtitle">Voice • Translate • Write</div>
+        <div className="app-brand">
+          <img src="/logo.png" alt="VoiceDiary Logo" className="app-logo" />
+          <div>
+            <div className="app-title">VoiceDiary Pro</div>
+            <div className="app-subtitle">Voice • Translate • Write</div>
+          </div>
         </div>
         <div className="header-actions">
           <button className="theme-toggle" onClick={() => setTab('privacy')} title="Security & Privacy">

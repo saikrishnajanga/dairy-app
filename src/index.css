@@ -111,6 +111,20 @@ body {
   backdrop-filter: blur(12px);
 }
 
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .app-title {
   font-size: 26px;
   font-weight: 700;
@@ -1518,6 +1532,16 @@ body {
   font-size: 64px;
   margin-bottom: 16px;
   animation: pulse-btn 2s ease-in-out infinite;
+}
+
+.lock-logo {
+  width: 100px;
+  height: 100px;
+  border-radius: var(--radius-xl);
+  object-fit: contain;
+  margin-bottom: 20px;
+  animation: pulse-btn 2s ease-in-out infinite;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
 }
 
 .lock-title {
