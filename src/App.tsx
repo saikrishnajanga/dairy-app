@@ -3,12 +3,14 @@ import VoiceRecorder from './components/VoiceRecorder'
 import DiaryList from './components/DiaryList'
 import TranslatorScreen from './components/TranslatorScreen'
 import TextDiaryScreen from './components/TextDiaryScreen'
+import AppLock from './components/AppLock'
+import PrivacyScreen from './components/PrivacyScreen'
 import {
   saveEntry, getEntries, deleteEntry, updateEntry,
   searchEntries, exportEntries, DiaryEntry,
 } from './services/storage'
 
-type Tab = 'voice' | 'translate' | 'diary'
+type Tab = 'voice' | 'translate' | 'diary' | 'privacy'
 
 function useToast() {
   const [msg, setMsg] = useState('')
@@ -83,6 +85,7 @@ export default function App() {
   }
 
   return (
+    <AppLock>
     <div className="app">
       {/* Header */}
       <header className="app-header">
@@ -91,6 +94,9 @@ export default function App() {
           <div className="app-subtitle">Voice • Translate • Write</div>
         </div>
         <div className="header-actions">
+          <button className="theme-toggle" onClick={() => setTab('privacy')} title="Security & Privacy">
+            🛡️
+          </button>
           <button className="theme-toggle" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
@@ -170,10 +176,14 @@ export default function App() {
 
         {/* TAB 3: Text Diary */}
         {tab === 'diary' && <TextDiaryScreen />}
+
+        {/* TAB 4: Privacy & Security */}
+        {tab === 'privacy' && <PrivacyScreen onBack={() => setTab('voice')} showToast={toast.show} />}
       </div>
 
       {/* Toast */}
       <div className={`toast ${toast.visible ? 'visible' : ''}`}>{toast.msg}</div>
     </div>
+    </AppLock>
   )
 }
