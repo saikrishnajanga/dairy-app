@@ -157,16 +157,36 @@ export default function TextDiaryScreen() {
       const text = editorRef.current.innerText
       const lines = doc.splitTextToSize(text, 170)
       doc.text(lines, 20, 45)
-      doc.save(`${title.replace(/\s+/g, '_')}.pdf`)
-      showToast('📄 PDF exported!')
-    } catch { showToast('PDF export failed') }
+
+      const { Capacitor } = await import('@capacitor/core')
+      if (Capacitor.isNativePlatform()) {
+        // Native: save to cache then share
+        const { Filesystem, Directory } = await import('@capacitor/filesystem')
+        const { Share } = await import('@capacitor/share')
+        const base64 = doc.output('datauristring').split(',')[1]
+        const fileName = `${title.replace(/\s+/g, '_')}.pdf`
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory: Directory.Cache,
+        })
+        await Share.share({
+          title: `${title} - VoiceDiary Pro`,
+          url: result.uri,
+        })
+        showToast('📄 PDF ready to save!')
+      } else {
+        // Web: download
+        doc.save(`${title.replace(/\s+/g, '_')}.pdf`)
+        showToast('📄 PDF downloaded!')
+      }
+    } catch (e: any) { showToast('Export failed: ' + (e?.message || e)) }
   }
 
-  // ─── Export Word (HTML-based .doc) ───
-  const handleExportWord = () => {
+  // ─── Export Word ───
+  const handleExportWord = async () => {
     if (!activeEntry || !editorRef.current) return
-    const html = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
       <head><meta charset="utf-8"><title>${title}</title></head>
       <body>
         <h1>${title}</h1>
@@ -174,12 +194,32 @@ export default function TextDiaryScreen() {
         <hr/>
         ${editorRef.current.innerHTML}
       </body></html>`
-    const blob = new Blob([html], { type: 'application/msword' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `${title.replace(/\s+/g, '_')}.doc`; a.click()
-    URL.revokeObjectURL(url)
-    showToast('📝 Word file exported!')
+
+    try {
+      const { Capacitor } = await import('@capacitor/core')
+      if (Capacitor.isNativePlatform()) {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem')
+        const { Share } = await import('@capacitor/share')
+        const fileName = `${title.replace(/\s+/g, '_')}.doc`
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: btoa(unescape(encodeURIComponent(html))),
+          directory: Directory.Cache,
+        })
+        await Share.share({
+          title: `${title} - VoiceDiary Pro`,
+          url: result.uri,
+        })
+        showToast('📝 Word ready to save!')
+      } else {
+        const blob = new Blob([html], { type: 'application/msword' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = `${title.replace(/\s+/g, '_')}.doc`; a.click()
+        URL.revokeObjectURL(url)
+        showToast('📝 Word downloaded!')
+      }
+    } catch (e: any) { showToast('Export failed: ' + (e?.message || e)) }
   }
 
   // ─── PIN Modal ───
