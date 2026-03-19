@@ -47,19 +47,21 @@ export default function DiaryList({
           <div className="empty-emoji">📖</div>
           <div className="empty-title">No diary entries yet</div>
           <div className="empty-desc">
-            Tap the 🎤 button to start recording<br />your first entry in Telugu
+            Tap the 🎤 button above to start recording<br />your first entry in Telugu
           </div>
         </div>
       ) : (
-        entries.map(entry => (
-          <DiaryEntry
-            key={entry.id}
-            entry={entry}
-            onDelete={onDelete}
-            onUpdate={onUpdate}
-            onShare={onShare}
-          />
-        ))
+        <div className="diary-grid">
+          {entries.map(entry => (
+            <DiaryEntry
+              key={entry.id}
+              entry={entry}
+              onDelete={onDelete}
+              onUpdate={onUpdate}
+              onShare={onShare}
+            />
+          ))}
+        </div>
       )}
     </div>
   )

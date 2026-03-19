@@ -43,7 +43,7 @@ export function useSpeechToText() {
 
   // ═══════════════════════════════════════════
   //  NATIVE: Use Google's speech popup dialog
-  //  Most reliable, returns results directly
+  //  Appends each result to accumulated text
   // ═══════════════════════════════════════════
   const startNative = useCallback(async () => {
     // Permission check
@@ -65,7 +65,6 @@ export function useSpeechToText() {
     setState(p => ({ ...p, isListening: true, error: null, needsPermission: false }));
 
     try {
-      // Use popup mode — Google's built-in UI, very reliable
       const result = await SpeechRecognition.start({
         language: 'te-IN',
         maxResults: 3,
@@ -73,9 +72,9 @@ export function useSpeechToText() {
         popup: true,
       });
 
-      // Process result
       const text = result?.matches?.[0] || '';
       if (text) {
+        // APPEND to existing accumulated text (continuous mode)
         const full = accumulatedRef.current ? accumulatedRef.current + ' ' + text : text;
         accumulatedRef.current = full;
         setState(p => ({
@@ -90,7 +89,6 @@ export function useSpeechToText() {
       }
     } catch (e: any) {
       const msg = e?.message || String(e);
-      // User cancelled the popup — not an error
       if (msg.includes('cancel') || msg.includes('Cancel')) {
         setState(p => ({ ...p, isListening: false }));
       } else {
@@ -106,6 +104,7 @@ export function useSpeechToText() {
 
   // ═══════════════════════════════════════════
   //  WEB: Browser Web Speech API
+  //  Continuous mode — appends across sessions
   // ═══════════════════════════════════════════
   const startWeb = useCallback(async () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -120,17 +119,28 @@ export function useSpeechToText() {
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
+    // Remember what we had before this session
+    const previousText = accumulatedRef.current;
+
     rec.onstart = () => setState(p => ({ ...p, isListening: true, error: null }));
 
     rec.onresult = (event: globalThis.SpeechRecognitionEvent) => {
-      let finalText = '';
+      let sessionFinal = '';
       let interim = '';
       for (let i = 0; i < event.results.length; i++) {
         const r = event.results[i];
-        if (r.isFinal) finalText += r[0].transcript + ' ';
+        if (r.isFinal) sessionFinal += r[0].transcript + ' ';
         else interim += r[0].transcript;
       }
-      if (finalText.trim()) accumulatedRef.current = finalText.trim();
+
+      // Combine previous accumulated text with this session's results
+      const currentFinal = sessionFinal.trim();
+      if (currentFinal) {
+        accumulatedRef.current = previousText
+          ? previousText + ' ' + currentFinal
+          : currentFinal;
+      }
+
       const combined = accumulatedRef.current + (interim.trim() ? ' ' + interim.trim() : '');
       setState(p => ({
         ...p,
@@ -164,6 +174,7 @@ export function useSpeechToText() {
 
   // ─── Unified API ───
   const startListening = useCallback(async () => {
+    // Do NOT reset accumulated text — append mode
     if (isNative) await startNative();
     else await startWeb();
   }, [isNative, startNative, startWeb]);
@@ -173,12 +184,13 @@ export function useSpeechToText() {
     else stopWeb();
   }, [isNative, stopNative, stopWeb]);
 
-  const resetTranscript = useCallback(() => {
+  // Explicit clear — only called by user pressing "Clear" button
+  const clearTranscript = useCallback(() => {
     accumulatedRef.current = '';
     setState(p => ({ ...p, teluguText: '', romanizedText: '', interimText: '', error: null }));
   }, []);
 
   useEffect(() => () => { webRecRef.current?.abort(); }, []);
 
-  return { ...state, startListening, stopListening, resetTranscript, requestPermission };
+  return { ...state, startListening, stopListening, clearTranscript, requestPermission };
 }

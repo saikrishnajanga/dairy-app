@@ -10,7 +10,7 @@ import {
   searchEntries, exportEntries, DiaryEntry,
 } from './services/storage'
 
-type Tab = 'voice' | 'translate' | 'diary' | 'privacy'
+type Tab = 'home' | 'translate' | 'diary' | 'privacy'
 
 function useToast() {
   const [msg, setMsg] = useState('')
@@ -23,11 +23,10 @@ function useToast() {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('voice')
+  const [tab, setTab] = useState<Tab>('home')
   const [entries, setEntries] = useState<DiaryEntry[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [sortNewest, setSortNewest] = useState(true)
-  const [showVoiceList, setShowVoiceList] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('vd_theme') as 'dark' | 'light') || 'dark'
   )
@@ -106,11 +105,11 @@ export default function App() {
         </div>
       </header>
 
-      {/* Bottom Tab Navigation */}
+      {/* Tab Navigation */}
       <div className="main-content">
         <div className="nav-tabs">
-          <button className={`nav-tab ${tab === 'voice' ? 'active' : ''}`} onClick={() => setTab('voice')}>
-            🎤 Voice
+          <button className={`nav-tab ${tab === 'home' ? 'active' : ''}`} onClick={() => setTab('home')}>
+            🏠 Home
           </button>
           <button className={`nav-tab ${tab === 'translate' ? 'active' : ''}`} onClick={() => setTab('translate')}>
             🌐 Translate
@@ -120,57 +119,32 @@ export default function App() {
           </button>
         </div>
 
-        {/* TAB 1: Voice Diary */}
-        {tab === 'voice' && (
+        {/* TAB 1: Home — Voice Recorder + Diary Grid */}
+        {tab === 'home' && (
           <>
-            {!showVoiceList ? (
-              <>
-                <VoiceRecorder onSave={handleSave} />
-                <div style={{ marginTop: 8 }}>
-                  <div className="list-header">
-                    <span style={{ fontSize: 16, fontWeight: 600 }}>📝 Recent Entries</span>
-                    {entries.length > 3 && (
-                      <button className="action-btn" onClick={() => setShowVoiceList(true)}>
-                        View All →
-                      </button>
-                    )}
-                  </div>
-                  {entries.length === 0 ? (
-                    <div className="empty-state">
-                      <div className="empty-emoji">✨</div>
-                      <div className="empty-desc">
-                        Your voice diary entries will appear here.<br />Tap 🎤 to record!
-                      </div>
-                    </div>
-                  ) : entries.slice(0, 3).map(entry => (
-                    <div key={entry.id} className="entry-card" onClick={() => setShowVoiceList(true)}>
-                      <div className="entry-meta">
-                        <span className="entry-date">📅 {entry.date}</span>
-                        <span className="entry-time">🕐 {entry.time}</span>
-                      </div>
-                      <div className="entry-text truncated">{entry.romanizedText}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="list-header">
-                  <button className="action-btn" onClick={() => setShowVoiceList(false)}>← Back</button>
-                  <span style={{ fontSize: 18, fontWeight: 600 }}>📖 All Voice Entries</span>
-                  <div className="list-actions">
-                    <button className="action-btn" onClick={() => setSortNewest(s => !s)}>
-                      {sortNewest ? '↓ Newest' : '↑ Oldest'}
-                    </button>
-                    {entries.length > 0 && (
-                      <button className="action-btn accent" onClick={handleExport}>📥 Export</button>
-                    )}
-                  </div>
-                </div>
-                <DiaryList entries={entries} searchQuery={searchQuery} onSearchChange={setSearchQuery}
-                  onDelete={handleDelete} onUpdate={handleUpdate} onShare={handleShare} />
-              </>
-            )}
+            <VoiceRecorder onSave={handleSave} />
+
+            {/* Actions bar */}
+            <div className="home-section-header">
+              <span className="section-title">📝 Your Entries</span>
+              <div className="list-actions">
+                <button className="action-btn" onClick={() => setSortNewest(s => !s)}>
+                  {sortNewest ? '↓ Newest' : '↑ Oldest'}
+                </button>
+                {entries.length > 0 && (
+                  <button className="action-btn accent" onClick={handleExport}>📥 Export</button>
+                )}
+              </div>
+            </div>
+
+            <DiaryList
+              entries={entries}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onDelete={handleDelete}
+              onUpdate={handleUpdate}
+              onShare={handleShare}
+            />
           </>
         )}
 
@@ -181,7 +155,7 @@ export default function App() {
         {tab === 'diary' && <TextDiaryScreen />}
 
         {/* TAB 4: Privacy & Security */}
-        {tab === 'privacy' && <PrivacyScreen onBack={() => setTab('voice')} showToast={toast.show} />}
+        {tab === 'privacy' && <PrivacyScreen onBack={() => setTab('home')} showToast={toast.show} />}
       </div>
 
       {/* Toast */}
