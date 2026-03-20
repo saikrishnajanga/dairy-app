@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { transliterate } from '../services/transliterator'
+import { hapticTap } from '../services/utils'
 
 interface Props {
   onSave: (teluguText: string, romanizedText: string) => void
@@ -18,6 +19,7 @@ export default function VoiceRecorder({ onSave }: Props) {
   const [showTextInput, setShowTextInput] = useState(false)
 
   const handleToggle = () => {
+    hapticTap()
     if (isListening) stopListening()
     else startListening() // No reset — appends to existing text
   }

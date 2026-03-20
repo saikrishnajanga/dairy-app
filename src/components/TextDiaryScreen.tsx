@@ -4,23 +4,26 @@ import {
   searchTextEntries, hasPinSet, setDiaryPin, verifyPin,
   type TextDiaryEntry,
 } from '../services/textDiary'
+import ConfirmDialog from './ConfirmDialog'
+import { useToast } from '../hooks/useToast'
 
 export default function TextDiaryScreen() {
   const [entries, setEntries] = useState<TextDiaryEntry[]>([])
   const [search, setSearch] = useState('')
   const [activeEntry, setActiveEntry] = useState<TextDiaryEntry | null>(null)
   const [title, setTitle] = useState('')
-  const [toast, setToast] = useState('')
+  const toast = useToast()
   const [pinModal, setPinModal] = useState<{ action: string; entryId?: string } | null>(null)
   const [pinInput, setPinInput] = useState('')
   const [pinConfirm, setPinConfirm] = useState('')
   const [pinError, setPinError] = useState('')
   const [fontSize, setFontSize] = useState(15)
   const [fontColor, setFontColor] = useState('#f0f0ff')
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; event: React.MouseEvent } | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout>>()
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2000) }
+  const showToast = toast.show
 
   const loadEntries = useCallback(() => {
     setEntries(search ? searchTextEntries(search) : getTextEntries())
@@ -51,7 +54,6 @@ export default function TextDiaryScreen() {
   }
 
   const handleOpen = (entry: TextDiaryEntry) => {
-    // Check if locked
     if (entry.locked) {
       setPinModal({ action: 'unlock_view', entryId: entry.id })
       setPinInput(''); setPinError('')
@@ -82,10 +84,16 @@ export default function TextDiaryScreen() {
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    deleteTextEntry(id)
-    if (activeEntry?.id === id) { setActiveEntry(null); setTitle('') }
+    setConfirmDelete({ id, event: e })
+  }
+
+  const confirmDeleteEntry = () => {
+    if (!confirmDelete) return
+    deleteTextEntry(confirmDelete.id)
+    if (activeEntry?.id === confirmDelete.id) { setActiveEntry(null); setTitle('') }
     loadEntries()
     showToast('🗑️ Deleted')
+    setConfirmDelete(null)
   }
 
   const handleBack = () => {
@@ -102,15 +110,13 @@ export default function TextDiaryScreen() {
   }
 
   // ─── Lock/Unlock ───
-  const handleLockToggle = () => {
+  const handleLockToggle = async () => {
     if (!activeEntry) return
     if (activeEntry.locked) {
-      // Unlock
       updateTextEntry(activeEntry.id, { locked: false })
       setActiveEntry({ ...activeEntry, locked: false })
       showToast('🔓 Unlocked')
     } else {
-      // Lock — need PIN
       if (!hasPinSet()) {
         setPinModal({ action: 'set_pin' })
         setPinInput(''); setPinConfirm(''); setPinError('')
@@ -122,11 +128,11 @@ export default function TextDiaryScreen() {
     }
   }
 
-  const handlePinSubmit = () => {
+  const handlePinSubmit = async () => {
     if (pinModal?.action === 'set_pin') {
       if (pinInput.length < 4) { setPinError('PIN must be at least 4 digits'); return }
       if (pinInput !== pinConfirm) { setPinError('PINs do not match'); return }
-      setDiaryPin(pinInput)
+      await setDiaryPin(pinInput)
       if (activeEntry) {
         updateTextEntry(activeEntry.id, { locked: true })
         setActiveEntry({ ...activeEntry, locked: true })
@@ -134,7 +140,8 @@ export default function TextDiaryScreen() {
       setPinModal(null)
       showToast('🔒 PIN set & entry locked')
     } else if (pinModal?.action === 'unlock_view') {
-      if (!verifyPin(pinInput)) { setPinError('Wrong PIN'); return }
+      const ok = await verifyPin(pinInput)
+      if (!ok) { setPinError('Wrong PIN'); return }
       const entry = entries.find(e => e.id === pinModal.entryId)
       if (entry) openEntry(entry)
       setPinModal(null)
@@ -160,23 +167,16 @@ export default function TextDiaryScreen() {
 
       const { Capacitor } = await import('@capacitor/core')
       if (Capacitor.isNativePlatform()) {
-        // Native: save to cache then share
         const { Filesystem, Directory } = await import('@capacitor/filesystem')
         const { Share } = await import('@capacitor/share')
         const base64 = doc.output('datauristring').split(',')[1]
         const fileName = `${title.replace(/\s+/g, '_')}.pdf`
         const result = await Filesystem.writeFile({
-          path: fileName,
-          data: base64,
-          directory: Directory.Cache,
+          path: fileName, data: base64, directory: Directory.Cache,
         })
-        await Share.share({
-          title: `${title} - VoiceDiary Pro`,
-          url: result.uri,
-        })
+        await Share.share({ title: `${title} - VoiceDiary Pro`, url: result.uri })
         showToast('📄 PDF ready to save!')
       } else {
-        // Web: download
         doc.save(`${title.replace(/\s+/g, '_')}.pdf`)
         showToast('📄 PDF downloaded!')
       }
@@ -206,10 +206,7 @@ export default function TextDiaryScreen() {
           data: btoa(unescape(encodeURIComponent(html))),
           directory: Directory.Cache,
         })
-        await Share.share({
-          title: `${title} - VoiceDiary Pro`,
-          url: result.uri,
-        })
+        await Share.share({ title: `${title} - VoiceDiary Pro`, url: result.uri })
         showToast('📝 Word ready to save!')
       } else {
         const blob = new Blob([html], { type: 'application/msword' })
@@ -316,7 +313,7 @@ export default function TextDiaryScreen() {
         </div>
 
         {renderPinModal()}
-        {toast && <div className="mini-toast">{toast}</div>}
+        {toast.visible && <div className="mini-toast">{toast.msg}</div>}
       </div>
     )
   }
@@ -373,8 +370,17 @@ export default function TextDiaryScreen() {
         ))
       )}
 
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <ConfirmDialog
+          message="Are you sure you want to delete this diary entry? This cannot be undone."
+          onConfirm={confirmDeleteEntry}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
       {renderPinModal()}
-      {toast && <div className="mini-toast">{toast}</div>}
+      {toast.visible && <div className="mini-toast">{toast.msg}</div>}
     </div>
   )
 }

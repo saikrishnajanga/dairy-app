@@ -8,11 +8,12 @@ interface Props {
   onDelete: (id: string) => void
   onUpdate: (id: string, text: string) => void
   onShare: (entry: EntryType) => void
+  onFavorite: (id: string) => void
 }
 
 export default function DiaryList({
   entries, searchQuery, onSearchChange,
-  onDelete, onUpdate, onShare,
+  onDelete, onUpdate, onShare, onFavorite,
 }: Props) {
   return (
     <div>
@@ -59,6 +60,7 @@ export default function DiaryList({
               onDelete={onDelete}
               onUpdate={onUpdate}
               onShare={onShare}
+              onFavorite={onFavorite}
             />
           ))}
         </div>

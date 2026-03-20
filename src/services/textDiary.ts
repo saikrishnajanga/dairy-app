@@ -1,4 +1,6 @@
 // Text Diary storage service with lock support
+import { genId, fmtDate, fmtTime, safeLSWrite } from './utils';
+import { encryptText, decryptText } from './security';
 
 export interface TextDiaryEntry {
   id: string;
@@ -14,21 +16,30 @@ export interface TextDiaryEntry {
 const DIARY_KEY = 'vd_text_diary';
 const PIN_KEY = 'vd_diary_pin';
 
-const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-
-const fmtDate = (ts: number) =>
-  new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-
-const fmtTime = (ts: number) =>
-  new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+// ─── In-memory cache ───
+let _cache: TextDiaryEntry[] | null = null;
 
 function readAll(): TextDiaryEntry[] {
-  try { return JSON.parse(localStorage.getItem(DIARY_KEY) || '[]'); }
-  catch { return []; }
+  if (_cache) return _cache;
+  try {
+    const raw = localStorage.getItem(DIARY_KEY) || '[]';
+    let json: string;
+    try {
+      const decrypted = decryptText(raw);
+      JSON.parse(decrypted);
+      json = decrypted;
+    } catch {
+      json = raw; // Legacy unencrypted data
+    }
+    _cache = JSON.parse(json);
+  } catch { _cache = []; }
+  return _cache!;
 }
 
-function writeAll(entries: TextDiaryEntry[]) {
-  localStorage.setItem(DIARY_KEY, JSON.stringify(entries));
+function writeAll(entries: TextDiaryEntry[]): boolean {
+  _cache = entries;
+  const encrypted = encryptText(JSON.stringify(entries));
+  return safeLSWrite(DIARY_KEY, encrypted);
 }
 
 export function createTextEntry(title: string, content: string): TextDiaryEntry {
@@ -71,19 +82,28 @@ export function searchTextEntries(query: string): TextDiaryEntry[] {
   );
 }
 
-// PIN/Password management
-export function setDiaryPin(pin: string) {
-  localStorage.setItem(PIN_KEY, btoa(pin));
+export function getTextEntryCount(): number {
+  return readAll().length;
 }
 
-export function getDiaryPin(): string | null {
+// PIN/Password management — using SHA-256 hashing
+async function sha256(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function setDiaryPin(pin: string) {
+  const hashed = await sha256(pin + '_vd_diary_salt');
+  localStorage.setItem(PIN_KEY, hashed);
+}
+
+export async function verifyPin(pin: string): Promise<boolean> {
   const stored = localStorage.getItem(PIN_KEY);
-  if (!stored) return null;
-  try { return atob(stored); } catch { return null; }
-}
-
-export function verifyPin(pin: string): boolean {
-  return getDiaryPin() === pin;
+  if (!stored) return false;
+  const hashed = await sha256(pin + '_vd_diary_salt');
+  return stored === hashed;
 }
 
 export function hasPinSet(): boolean {

@@ -26,7 +26,6 @@ export default function PrivacyScreen({ onBack, showToast }: Props) {
       showToast('🔓 App lock disabled')
     } else {
       if (hasAppPinSet()) {
-        // Re-enable with existing PIN
         localStorage.setItem('vd_app_lock_enabled', 'true')
         setAppLockEnabled(true)
         showToast('🔒 App lock enabled')
@@ -36,10 +35,10 @@ export default function PrivacyScreen({ onBack, showToast }: Props) {
     }
   }
 
-  const handleSetPin = () => {
+  const handleSetPin = async () => {
     if (newPin.length < 4) { setPinError('PIN must be at least 4 digits'); return }
     if (newPin !== confirmPin) { setPinError('PINs do not match'); return }
-    setAppPin(newPin)
+    await setAppPin(newPin)
     setAppLockEnabled(true)
     setShowPinSetup(false)
     setNewPin('')
@@ -48,11 +47,12 @@ export default function PrivacyScreen({ onBack, showToast }: Props) {
     showToast('🔒 App lock enabled with PIN')
   }
 
-  const handleChangePin = () => {
-    if (!verifyAppPin(currentPin)) { setPinError('Current PIN is wrong'); return }
+  const handleChangePin = async () => {
+    const valid = await verifyAppPin(currentPin)
+    if (!valid) { setPinError('Current PIN is wrong'); return }
     if (newPin.length < 4) { setPinError('New PIN must be at least 4 digits'); return }
     if (newPin !== confirmPin) { setPinError('PINs do not match'); return }
-    setAppPin(newPin)
+    await setAppPin(newPin)
     setShowChangePinModal(false)
     setCurrentPin('')
     setNewPin('')
@@ -130,10 +130,17 @@ export default function PrivacyScreen({ onBack, showToast }: Props) {
         </div>
         <div className="privacy-item">
           <div className="privacy-item-info">
-            <span className="privacy-item-label">Encryption</span>
-            <span className="privacy-item-desc">Diary entries are encrypted at rest</span>
+            <span className="privacy-item-label">Entry Encryption</span>
+            <span className="privacy-item-desc">All diary entries are encrypted at rest</span>
           </div>
-          <span className="privacy-badge">✅ Active</span>
+          <span className="privacy-badge">✅ Encrypted</span>
+        </div>
+        <div className="privacy-item">
+          <div className="privacy-item-info">
+            <span className="privacy-item-label">PIN Security</span>
+            <span className="privacy-item-desc">PINs are SHA-256 hashed before storage</span>
+          </div>
+          <span className="privacy-badge">✅ Hashed</span>
         </div>
         <div className="privacy-item">
           <div className="privacy-item-info">
@@ -153,11 +160,12 @@ export default function PrivacyScreen({ onBack, showToast }: Props) {
             <li>🔒 <strong>No data collection</strong> — We don't collect any personal data</li>
             <li>📱 <strong>Offline-first</strong> — All data stays on your device</li>
             <li>🚫 <strong>No analytics</strong> — No tracking or telemetry</li>
-            <li>🔐 <strong>Encrypted storage</strong> — Your entries are encrypted locally</li>
+            <li>🔐 <strong>Encrypted entries</strong> — All diary entries are encrypted at rest</li>
+            <li>🔑 <strong>SHA-256 hashed PINs</strong> — Your PINs cannot be reversed</li>
             <li>🗑️ <strong>Full control</strong> — Delete your data anytime from the app</li>
             <li>🎤 <strong>Microphone access</strong> — Used only for voice recording, never recorded in background</li>
           </ul>
-          <p className="privacy-version">Version 1.0 • Last updated: March 2026</p>
+          <p className="privacy-version">Version 1.2 • Last updated: March 2026</p>
         </div>
       </div>
 

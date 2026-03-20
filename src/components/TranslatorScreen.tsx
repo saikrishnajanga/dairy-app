@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { useToast } from '../hooks/useToast'
 import {
   translate, LANGUAGES, SPEECH_LANG_MAP,
   saveTranslation, getSavedTranslations, deleteTranslation,
@@ -15,10 +16,10 @@ export default function TranslatorScreen() {
   const [saved, setSaved] = useState<SavedTranslation[]>(getSavedTranslations())
   const [showSaved, setShowSaved] = useState(false)
   const [isListening, setIsListening] = useState(false)
-  const [toast, setToast] = useState('')
+  const toast = useToast()
   const recRef = useRef<SpeechRecognition | null>(null)
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2000) }
+  const showToast = toast.show
 
   const handleTranslate = useCallback(async (text?: string) => {
     const t = text || sourceText
@@ -197,7 +198,7 @@ export default function TranslatorScreen() {
         )}
       </div>
 
-      {toast && <div className="mini-toast">{toast}</div>}
+      {toast.visible && <div className="mini-toast">{toast.msg}</div>}
     </div>
   )
 }

@@ -36,17 +36,18 @@ export default function AppLock({ children }: AppLockProps) {
 
   if (!locked) return <>{children}</>
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (mode === 'setup') {
       if (pin.length < 4) { setError('PIN must be at least 4 digits'); return }
       if (pin !== confirmPin) { setError('PINs do not match'); return }
-      setAppPin(pin)
+      await setAppPin(pin)
       setLocked(false)
       setPin('')
       setConfirmPin('')
       setError('')
     } else {
-      if (verifyAppPin(pin)) {
+      const ok = await verifyAppPin(pin)
+      if (ok) {
         setLocked(false)
         setPin('')
         setError('')

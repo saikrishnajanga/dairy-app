@@ -1,12 +1,60 @@
-// Simple encryption/decryption for diary entries using AES-like XOR cipher
-// This provides basic protection for data at rest in localStorage
+// Security service with proper SHA-256 hashing and XOR encryption
 
-const ENCRYPT_KEY = 'vd_encrypt_key';
 const APP_LOCK_KEY = 'vd_app_lock_enabled';
 const APP_PIN_KEY = 'vd_app_pin';
 const AUTO_LOCK_KEY = 'vd_auto_lock';
+const ENCRYPT_KEY = 'vd_encrypt_key';
 
-// ─── Encryption ────────────────────────────────────────────
+// ─── SHA-256 Hashing (for PINs) ───────────────────────────
+
+async function sha256(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// We store a pre-computed hash synchronously for fast comparison
+// On set: compute hash async, store it
+// On verify: compute hash async, compare
+
+export async function setAppPin(pin: string) {
+  const hashed = await sha256(pin + '_vd_secure_salt');
+  localStorage.setItem(APP_PIN_KEY, hashed);
+  localStorage.setItem(APP_LOCK_KEY, 'true');
+}
+
+export async function verifyAppPin(pin: string): Promise<boolean> {
+  const stored = localStorage.getItem(APP_PIN_KEY);
+  if (!stored) return false;
+  const hashed = await sha256(pin + '_vd_secure_salt');
+  return stored === hashed;
+}
+
+export function hasAppLock(): boolean {
+  return localStorage.getItem(APP_LOCK_KEY) === 'true';
+}
+
+export function hasAppPinSet(): boolean {
+  return !!localStorage.getItem(APP_PIN_KEY);
+}
+
+export function removeAppLock() {
+  localStorage.removeItem(APP_LOCK_KEY);
+  localStorage.removeItem(APP_PIN_KEY);
+}
+
+// ─── Auto Lock Settings ────────────────────────────────────
+
+export function setAutoLock(enabled: boolean) {
+  localStorage.setItem(AUTO_LOCK_KEY, enabled ? 'true' : 'false');
+}
+
+export function isAutoLockEnabled(): boolean {
+  return localStorage.getItem(AUTO_LOCK_KEY) !== 'false';
+}
+
+// ─── Encryption (XOR with random key — basic protection) ───
 
 function getOrCreateKey(): string {
   let key = localStorage.getItem(ENCRYPT_KEY);
@@ -42,45 +90,6 @@ export function decryptText(encrypted: string): string {
     }
     return new TextDecoder().decode(decrypted);
   } catch {
-    return encrypted; // Return as-is if decryption fails (unencrypted data)
+    return encrypted; // Return as-is if decryption fails (unencrypted legacy data)
   }
-}
-
-// ─── App Lock ──────────────────────────────────────────────
-
-export function setAppPin(pin: string) {
-  // Hash the PIN for secure storage
-  const hashed = btoa(pin.split('').reverse().join('') + '_vd_secure');
-  localStorage.setItem(APP_PIN_KEY, hashed);
-  localStorage.setItem(APP_LOCK_KEY, 'true');
-}
-
-export function verifyAppPin(pin: string): boolean {
-  const stored = localStorage.getItem(APP_PIN_KEY);
-  if (!stored) return false;
-  const hashed = btoa(pin.split('').reverse().join('') + '_vd_secure');
-  return stored === hashed;
-}
-
-export function hasAppLock(): boolean {
-  return localStorage.getItem(APP_LOCK_KEY) === 'true';
-}
-
-export function hasAppPinSet(): boolean {
-  return !!localStorage.getItem(APP_PIN_KEY);
-}
-
-export function removeAppLock() {
-  localStorage.removeItem(APP_LOCK_KEY);
-  localStorage.removeItem(APP_PIN_KEY);
-}
-
-// ─── Auto Lock Settings ────────────────────────────────────
-
-export function setAutoLock(enabled: boolean) {
-  localStorage.setItem(AUTO_LOCK_KEY, enabled ? 'true' : 'false');
-}
-
-export function isAutoLockEnabled(): boolean {
-  return localStorage.getItem(AUTO_LOCK_KEY) !== 'false'; // Default true
 }
