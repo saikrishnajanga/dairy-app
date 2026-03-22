@@ -118,7 +118,7 @@ export default function App() {
               <span className="section-title">📝 Your Entries</span>
               <div className="list-actions">
                 <button className={`action-btn ${showFavOnly ? 'fav-active' : ''}`} onClick={() => setShowFavOnly(f => !f)}>
-                  {showFavOnly ? '⭐ Favorites' : '☆ All'}
+                  {showFavOnly ? '❤️ Favorites' : '☺ All'}
                 </button>
                 <button className="action-btn" onClick={() => setSortNewest(s => !s)}>
                   {sortNewest ? '↓ Newest' : '↑ Oldest'}
