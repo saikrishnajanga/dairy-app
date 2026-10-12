@@ -354,6 +354,22 @@ export default function App() {
               )}
             </div>
 
+            {/* Quick Mode Switcher */}
+            <div className="quick-mode-bar" role="tablist" aria-label="Feature Quick Switch">
+              <button className="quick-mode-pill active" onClick={() => setTab('home')}>
+                🎙️ Voice Journal
+              </button>
+              <button className="quick-mode-pill" onClick={() => setTab('whatsapp')}>
+                💬 WhatsApp Enhancer
+              </button>
+              <button className="quick-mode-pill" onClick={() => setTab('diary')}>
+                ✍️ Notebook
+              </button>
+              <button className="quick-mode-pill" onClick={() => setTab('translate')}>
+                🌐 Translator
+              </button>
+            </div>
+
             {/* keyed by profile so a switch remounts the recorder with fresh data */}
             <VoiceRecorder key={activeProfile?.id ?? 'no-profile'} onSave={handleSave} />
             <div className="home-section-header">
@@ -407,6 +423,7 @@ export default function App() {
             </svg>
           </div>
           <span className="bottom-nav-label">Home</span>
+          {tab === 'home' && <span className="bottom-nav-indicator-bar" />}
         </button>
 
         <button className={`bottom-nav-item ${tab === 'translate' ? 'active' : ''}`} onClick={() => setTab('translate')}>
@@ -418,6 +435,7 @@ export default function App() {
             </svg>
           </div>
           <span className="bottom-nav-label">Translate</span>
+          {tab === 'translate' && <span className="bottom-nav-indicator-bar" />}
         </button>
 
         <button className={`bottom-nav-item ${tab === 'diary' ? 'active' : ''}`} onClick={() => setTab('diary')}>
@@ -433,6 +451,16 @@ export default function App() {
           {tab === 'diary' && <span className="bottom-nav-indicator-bar" />}
         </button>
 
+        <button className={`bottom-nav-item ${tab === 'whatsapp' ? 'active' : ''}`} onClick={() => setTab('whatsapp')}>
+          <div className="bottom-nav-icon-box whatsapp-nav-box">
+            <svg className="bottom-nav-icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            </svg>
+          </div>
+          <span className="bottom-nav-label">WhatsApp</span>
+          {tab === 'whatsapp' && <span className="bottom-nav-indicator-bar" />}
+        </button>
+
         <button className={`bottom-nav-item ${tab === 'privacy' ? 'active' : ''}`} onClick={() => setTab('privacy')}>
           <div className="bottom-nav-icon-box">
             <svg className="bottom-nav-icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -440,6 +468,7 @@ export default function App() {
             </svg>
           </div>
           <span className="bottom-nav-label">Security</span>
+          {tab === 'privacy' && <span className="bottom-nav-indicator-bar" />}
         </button>
       </nav>
 

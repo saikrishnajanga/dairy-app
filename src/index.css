@@ -4803,26 +4803,32 @@ button:disabled {
   background: #e2e8f0;
 }
 
-/* ─── Floating Pill Bottom Navigation Bar (Exact Match to Screenshot) ────── */
+/* ─── Floating Pill Bottom Navigation Bar ────── */
 .bottom-nav {
   position: fixed;
-  bottom: 14px;
-  left: 14px;
-  right: 14px;
-  height: 68px;
-  background: rgba(255, 255, 255, 0.96);
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  height: 66px;
+  background: var(--surface);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border: 1px solid var(--border);
   border-radius: 9999px;
-  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding: 4px 10px;
+  padding: 4px 6px;
   z-index: 100;
-  max-width: 480px;
+  max-width: 520px;
   margin: 0 auto;
+}
+
+[data-theme="light"] .bottom-nav {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.08);
 }
 
 .bottom-nav-item {
@@ -4834,61 +4840,117 @@ button:disabled {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 18px;
+  padding: 3px 2px;
+  border-radius: 16px;
   transition: all 0.2s;
-  min-width: 62px;
+  min-width: 0;
+  flex: 1;
 }
 
 .bottom-nav-icon-box {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 12px;
+  padding: 4px 10px;
   border-radius: 9999px;
   transition: all 0.2s;
+  color: var(--text-muted);
 }
 
-.bottom-nav-icon {
-  font-size: 20px;
-  line-height: 1;
-  color: #64748b;
+.bottom-nav-icon-svg {
   transition: all 0.2s;
 }
 
 .bottom-nav-label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  color: #64748b;
-  margin-top: 3px;
+  color: var(--text-muted);
+  margin-top: 2px;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
-/* Active Diary State from Screenshot */
+/* Active Bottom Nav State */
 .bottom-nav-item.active .bottom-nav-icon-box {
-  background: #ede9fe;
-  color: #7c3aed;
+  background: var(--primary-soft);
+  color: var(--primary);
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15);
 }
 
-.bottom-nav-item.active .bottom-nav-icon {
-  color: #7c3aed;
+.bottom-nav-item.active .bottom-nav-icon-box.whatsapp-nav-box {
+  background: rgba(37, 211, 102, 0.15);
+  color: #25d366;
+}
+
+.bottom-nav-item.active .bottom-nav-icon-svg {
+  stroke: var(--primary);
+}
+
+.bottom-nav-item.active .whatsapp-nav-box .bottom-nav-icon-svg {
+  stroke: #25d366;
 }
 
 .bottom-nav-item.active .bottom-nav-label {
-  color: #7c3aed;
+  color: var(--primary);
   font-weight: 700;
 }
 
 .bottom-nav-indicator-bar {
   position: absolute;
   bottom: -3px;
-  width: 32px;
-  height: 3.5px;
-  background: #7c3aed;
+  width: 26px;
+  height: 3px;
+  background: var(--primary);
   border-radius: 9999px;
-  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 1px 4px var(--primary-glow);
 }
+
+/* ─── Quick Feature Mode Bar on Home Screen ─── */
+.quick-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 12px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.quick-mode-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.quick-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.quick-mode-pill:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.quick-mode-pill.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.2);
+}
+
 
 /* Light Mode Defaults for Diary Screen */
 [data-theme="light"], :root {
