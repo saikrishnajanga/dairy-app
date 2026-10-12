@@ -8,5 +8,6 @@ android/build/
 android/.idea/
 android/local.properties
 android/capacitor-cordova-android-plugins/build/
+.idea/
 
 .vercel

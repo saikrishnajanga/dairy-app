@@ -1,21 +1,30 @@
 interface Props {
   message: string;
+  title?: string;
+  confirmLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export default function ConfirmDialog({ message, onConfirm, onCancel }: Props) {
+export default function ConfirmDialog({
+  message,
+  title = 'Delete Entry?',
+  confirmLabel = 'Delete',
+  onConfirm,
+  onCancel
+}: Props) {
   return (
-    <div className="pin-overlay" onClick={onCancel}>
-      <div className="pin-modal" onClick={e => e.stopPropagation()}>
-        <h3>⚠️ Confirm</h3>
-        <p style={{ color: 'var(--text-secondary)', margin: '12px 0 20px', fontSize: 14 }}>
+    <div className="pin-overlay" onClick={onCancel} role="dialog" aria-modal="true">
+      <div className="pin-modal confirm-modal" onClick={e => e.stopPropagation()}>
+        <div className="confirm-icon-badge">🗑️</div>
+        <h3 className="confirm-title">{title}</h3>
+        <p className="confirm-message">
           {message}
         </p>
-        <div className="pin-actions">
-          <button className="pin-cancel" onClick={onCancel}>Cancel</button>
-          <button className="pin-submit" onClick={onConfirm} style={{ background: '#e74c3c' }}>
-            Delete
+        <div className="pin-actions confirm-actions">
+          <button className="pin-cancel action-btn" onClick={onCancel}>Cancel</button>
+          <button className="pin-submit action-btn danger" onClick={onConfirm}>
+            {confirmLabel}
           </button>
         </div>
       </div>

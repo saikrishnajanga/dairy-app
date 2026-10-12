@@ -7,12 +7,15 @@ const ENCRYPT_KEY = 'vd_encrypt_key';
 
 // ─── SHA-256 Hashing (for PINs) ───────────────────────────
 
-async function sha256(text: string): Promise<string> {
+/** SHA-256 hex digest — used for PINs (never store a PIN in clear). */
+export async function sha256Hex(text: string): Promise<string> {
   const data = new TextEncoder().encode(text);
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash))
     .map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+const sha256 = sha256Hex;
 
 // We store a pre-computed hash synchronously for fast comparison
 // On set: compute hash async, store it

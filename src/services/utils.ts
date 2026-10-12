@@ -20,14 +20,44 @@ export function safeLSWrite(key: string, value: string): boolean {
   }
 }
 
-/** Haptic tap feedback — uses Capacitor Haptics on native, no-op on web */
+let audioCtx: AudioContext | null = null;
+
+/** Subtle synthesized tactile audio tick for physical feedback */
+export function playTactileTick() {
+  try {
+    const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!audioCtx && AudioCtxClass) {
+      audioCtx = new AudioCtxClass();
+    }
+    if (audioCtx && audioCtx.state !== 'closed') {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(650, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(320, audioCtx.currentTime + 0.022);
+      gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.022);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.022);
+    }
+  } catch { /* ignore if audio context blocked */ }
+}
+
+/** Haptic tap feedback — uses Capacitor Haptics on native and synthesized tick on web */
 export async function hapticTap() {
+  playTactileTick();
   try {
     const { Capacitor } = await import('@capacitor/core');
     if (Capacitor.isNativePlatform()) {
       const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
       await Haptics.impact({ style: ImpactStyle.Light });
     }
-  } catch { /* no-op on web */ }
+  } catch { /* no-op */ }
 }
+
 

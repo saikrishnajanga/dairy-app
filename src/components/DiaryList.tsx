@@ -9,11 +9,12 @@ interface Props {
   onUpdate: (id: string, text: string) => void
   onShare: (entry: EntryType) => void
   onFavorite: (id: string) => void
+  onExportDoc: (entry: EntryType) => void
 }
 
 export default function DiaryList({
   entries, searchQuery, onSearchChange,
-  onDelete, onUpdate, onShare, onFavorite,
+  onDelete, onUpdate, onShare, onFavorite, onExportDoc,
 }: Props) {
   return (
     <div>
@@ -61,6 +62,7 @@ export default function DiaryList({
               onUpdate={onUpdate}
               onShare={onShare}
               onFavorite={onFavorite}
+              onExportDoc={onExportDoc}
             />
           ))}
         </div>

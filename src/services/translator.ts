@@ -1,5 +1,8 @@
 // Universal Translator using MyMemory free API (100+ languages, no key needed)
 
+import { scopedKey } from './profiles';
+import { schedulePush } from './cloudSync';
+
 export interface Language {
   code: string;
   name: string;
@@ -90,7 +93,8 @@ export interface SavedTranslation {
   translatedText: string;
 }
 
-const TRANS_KEY = 'vd_translations';
+// Saved translations belong to the active profile.
+const transKey = () => scopedKey('vd_translations');
 
 export function saveTranslation(t: Omit<SavedTranslation, 'id' | 'timestamp' | 'date'>): SavedTranslation {
   const entry: SavedTranslation = {
@@ -101,16 +105,18 @@ export function saveTranslation(t: Omit<SavedTranslation, 'id' | 'timestamp' | '
   };
   const all = getSavedTranslations();
   all.unshift(entry);
-  localStorage.setItem(TRANS_KEY, JSON.stringify(all));
+  localStorage.setItem(transKey(), JSON.stringify(all));
+  schedulePush('vd_translations'); // mirror to the Google account
   return entry;
 }
 
 export function getSavedTranslations(): SavedTranslation[] {
-  try { return JSON.parse(localStorage.getItem(TRANS_KEY) || '[]'); }
+  try { return JSON.parse(localStorage.getItem(transKey()) || '[]'); }
   catch { return []; }
 }
 
 export function deleteTranslation(id: string) {
   const filtered = getSavedTranslations().filter(t => t.id !== id);
-  localStorage.setItem(TRANS_KEY, JSON.stringify(filtered));
+  localStorage.setItem(transKey(), JSON.stringify(filtered));
+  schedulePush('vd_translations');
 }

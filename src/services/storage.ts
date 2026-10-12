@@ -1,5 +1,7 @@
 import { genId, fmtDate, fmtTime, safeLSWrite } from './utils';
 import { encryptText, decryptText } from './security';
+import { scopedKey } from './profiles';
+import { schedulePush } from './cloudSync';
 
 export interface DiaryEntry {
   id: string;
@@ -11,15 +13,21 @@ export interface DiaryEntry {
   favorite?: boolean;
 }
 
-const KEY = 'voicediary_entries';
+const KEY_BASE = 'voicediary_entries';
+
+// Entries belong to the active profile.
+const key = () => scopedKey(KEY_BASE);
 
 // ─── In-memory cache to avoid repeated JSON parsing ───
 let _cache: DiaryEntry[] | null = null;
 
+/** Drop the cache — call when the active profile changes. */
+export function resetEntriesCache() { _cache = null; }
+
 function read(): DiaryEntry[] {
   if (_cache) return _cache;
   try {
-    const raw = localStorage.getItem(KEY) || '[]';
+    const raw = localStorage.getItem(key()) || '[]';
     // Try decrypting first (encrypted data), fall back to raw (legacy unencrypted)
     let json: string;
     try {
@@ -37,9 +45,11 @@ function read(): DiaryEntry[] {
 function write(entries: DiaryEntry[]): boolean {
   _cache = entries;
   const encrypted = encryptText(JSON.stringify(entries));
-  const ok = safeLSWrite(KEY, encrypted);
+  const ok = safeLSWrite(key(), encrypted);
   if (!ok) {
     console.error('Storage full! Could not save entries.');
+  } else {
+    schedulePush(KEY_BASE); // mirror to the Google account (no-op otherwise)
   }
   return ok;
 }
@@ -96,7 +106,13 @@ export function getEntryCount(): number {
 /** Export ALL app data as a JSON backup string */
 export function exportAllData(): string {
   const backup: Record<string, string | null> = {};
-  const keys = ['voicediary_entries', 'vd_text_diary', 'vd_saved_translations', 'vd_theme', 'vd_app_lock_enabled', 'vd_auto_lock'];
+  // Global settings plus the ACTIVE profile's content keys.
+  const keys = [
+    scopedKey(KEY_BASE), scopedKey('vd_text_diary'), scopedKey('vd_diary_pin'),
+    scopedKey('vd_translations'),
+    'vd_profiles', 'vd_active_profile',
+    'vd_theme', 'vd_app_lock_enabled', 'vd_auto_lock',
+  ];
   keys.forEach(k => { backup[k] = localStorage.getItem(k); });
   return JSON.stringify({ _backup: 'VoiceDiary Pro', _version: '1.2', _date: new Date().toISOString(), data: backup }, null, 2);
 }

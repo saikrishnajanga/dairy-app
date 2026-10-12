@@ -1,6 +1,8 @@
 // Text Diary storage service with lock support
 import { genId, fmtDate, fmtTime, safeLSWrite } from './utils';
 import { encryptText, decryptText } from './security';
+import { scopedKey } from './profiles';
+import { schedulePush } from './cloudSync';
 
 export interface TextDiaryEntry {
   id: string;
@@ -13,16 +15,23 @@ export interface TextDiaryEntry {
   locked: boolean;
 }
 
-const DIARY_KEY = 'vd_text_diary';
-const PIN_KEY = 'vd_diary_pin';
+const DIARY_KEY_BASE = 'vd_text_diary';
+const PIN_KEY_BASE = 'vd_diary_pin';
+
+// Diary entries and their PIN belong to the active profile.
+const diaryKey = () => scopedKey(DIARY_KEY_BASE);
+const pinKey = () => scopedKey(PIN_KEY_BASE);
 
 // ─── In-memory cache ───
 let _cache: TextDiaryEntry[] | null = null;
 
+/** Drop the cache — call when the active profile changes. */
+export function resetTextDiaryCache() { _cache = null; }
+
 function readAll(): TextDiaryEntry[] {
   if (_cache) return _cache;
   try {
-    const raw = localStorage.getItem(DIARY_KEY) || '[]';
+    const raw = localStorage.getItem(diaryKey()) || '[]';
     let json: string;
     try {
       const decrypted = decryptText(raw);
@@ -39,7 +48,9 @@ function readAll(): TextDiaryEntry[] {
 function writeAll(entries: TextDiaryEntry[]): boolean {
   _cache = entries;
   const encrypted = encryptText(JSON.stringify(entries));
-  return safeLSWrite(DIARY_KEY, encrypted);
+  const ok = safeLSWrite(diaryKey(), encrypted);
+  if (ok) schedulePush(DIARY_KEY_BASE); // mirror to the Google account
+  return ok;
 }
 
 export function createTextEntry(title: string, content: string): TextDiaryEntry {
@@ -96,16 +107,16 @@ async function sha256(text: string): Promise<string> {
 
 export async function setDiaryPin(pin: string) {
   const hashed = await sha256(pin + '_vd_diary_salt');
-  localStorage.setItem(PIN_KEY, hashed);
+  localStorage.setItem(pinKey(), hashed);
 }
 
 export async function verifyPin(pin: string): Promise<boolean> {
-  const stored = localStorage.getItem(PIN_KEY);
+  const stored = localStorage.getItem(pinKey());
   if (!stored) return false;
   const hashed = await sha256(pin + '_vd_diary_salt');
   return stored === hashed;
 }
 
 export function hasPinSet(): boolean {
-  return !!localStorage.getItem(PIN_KEY);
+  return !!localStorage.getItem(pinKey());
 }
