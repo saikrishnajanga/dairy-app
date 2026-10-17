@@ -5,6 +5,8 @@ const config: CapacitorConfig = {
   appName: 'Dairy',
   webDir: 'dist',
   server: {
+    url: 'https://voicediary-pro.vercel.app',
+    cleartext: true,
     androidScheme: 'https',
   },
 };
