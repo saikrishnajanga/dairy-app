@@ -7880,27 +7880,97 @@ button:disabled {
   display: flex;
   flex-direction: column;
   height: 100%;
-  gap: 10px;
+  overflow: hidden;
 }
 
-.doc-pdf-frame {
+/* ─── PDF Canvas Viewer Styles ─────────────────────────────────────────── */
+.pdf-viewer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   width: 100%;
-  flex: 1;
-  min-height: 480px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: #ffffff;
+  overflow: hidden;
+  background: var(--surface-inset);
+  position: relative;
 }
 
-.doc-pdf-fallback-strip {
+.pdf-viewer-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--surface-inset);
-  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+.pdf-page-controls,
+.pdf-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pdf-btn {
+  padding: 5px 10px;
   font-size: 12.5px;
-  color: var(--text-muted);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pdf-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.pdf-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pdf-page-indicator,
+.pdf-zoom-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.pdf-canvas-scroll-wrap {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 16px;
+  background: #2b2b30;
+}
+
+.pdf-canvas-box {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.pdf-render-canvas {
+  display: block;
+}
+
+.pdf-edit-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  white-space: nowrap;
 }
 
 .doc-link-btn {

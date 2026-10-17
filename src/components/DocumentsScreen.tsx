@@ -20,6 +20,7 @@ import {
 import { createTextEntry, type TextDiaryEntry } from '../services/textDiary';
 import ConfirmDialog from './ConfirmDialog';
 import { hapticTap } from '../services/utils';
+import PdfViewer from './PdfViewer';
 
 interface Props {
   showToast: (msg: string) => void;
@@ -41,6 +42,7 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
   // Preview & Edit Modal states
   const [previewDoc, setPreviewDoc] = useState<DocumentItem | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewText, setPreviewText] = useState<string>('');
   const [isTextLoading, setIsTextLoading] = useState(false);
   const [isEditingText, setIsEditingText] = useState(false);
@@ -165,10 +167,15 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
     setIsEditingText(false);
     setPreviewText('');
     setEditedText('');
+    setPreviewBlob(null);
 
     try {
-      const url = await getDocumentUrl(doc);
+      const [url, blob] = await Promise.all([
+        getDocumentUrl(doc),
+        getDocumentBlob(doc),
+      ]);
       setPreviewUrl(url);
+      setPreviewBlob(blob);
 
       const ext = doc.name.split('.').pop()?.toLowerCase() || '';
       const isReadableDoc =
@@ -179,8 +186,10 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
         ext === 'log' ||
         ext === 'docx' ||
         ext === 'doc' ||
+        ext === 'pdf' ||
         doc.mimeType?.startsWith('text/') ||
-        doc.mimeType?.includes('word');
+        doc.mimeType?.includes('word') ||
+        doc.mimeType?.includes('pdf');
 
       if (isReadableDoc) {
         setIsTextLoading(true);
@@ -192,7 +201,6 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
             text.includes('word/numbering.xml') ||
             text.includes('word/document.xml')
           ) {
-            const blob = await getDocumentBlob(doc);
             const extracted = await extractDocxText(blob);
             text = extracted || '(Word Document: Tap "Edit like Google Doc" to view and edit formatted text)';
           }
@@ -216,6 +224,7 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
     }
     setPreviewDoc(null);
     setPreviewUrl(null);
+    setPreviewBlob(null);
     setPreviewText('');
     setEditedText('');
     setIsEditingText(false);
@@ -251,8 +260,10 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
         ext === 'md' ||
         ext === 'docx' ||
         ext === 'doc' ||
+        ext === 'pdf' ||
         doc.mimeType?.includes('text') ||
-        doc.mimeType?.includes('word')
+        doc.mimeType?.includes('word') ||
+        doc.mimeType?.includes('pdf')
       ) {
         text = await getDocumentTextContent(doc);
         if (
@@ -470,7 +481,7 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
         <div className="documents-grid">
           {filteredDocs.map((doc) => {
             const info = getDocTypeInfo(doc.name, doc.mimeType);
-            const isEditable = info.type === 'text' || info.type === 'word';
+            const isEditable = info.type === 'text' || info.type === 'word' || info.type === 'pdf';
 
             return (
               <div
@@ -620,7 +631,8 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
               <div className="doc-preview-top-actions">
                 {/* Google Doc Editor Launch Button */}
                 {(getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'text' ||
-                  getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'word') && (
+                  getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'word' ||
+                  getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'pdf') && (
                   <button
                     type="button"
                     className="doc-header-btn primary-doc-btn"
@@ -695,35 +707,23 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                   );
                 }
 
-                // 2. PDF PREVIEW
-                if (typeInfo.type === 'pdf' && previewUrl) {
+                // 2. PDF PREVIEW (Cross-Platform High-Res Canvas via PDF.js)
+                if (typeInfo.type === 'pdf') {
                   return (
                     <div className="doc-pdf-viewport">
-                      <iframe
-                        src={previewUrl}
-                        title={previewDoc.name}
-                        className="doc-pdf-frame"
-                      />
-                      <div className="doc-pdf-fallback-strip">
-                        <span>Previewing PDF document.</span>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <a
-                            href={previewUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="doc-link-btn"
-                          >
-                            ↗️ Open in New Window
-                          </a>
-                          <button
-                            type="button"
-                            className="doc-link-btn"
-                            onClick={() => handleDownload(previewDoc)}
-                          >
-                            ⬇️ Download PDF
-                          </button>
+                      {previewBlob ? (
+                        <PdfViewer
+                          blob={previewBlob}
+                          fileName={previewDoc.name}
+                          onOpenEditor={() => handleOpenGoogleDocEditor(previewDoc)}
+                          onDownload={() => handleDownload(previewDoc)}
+                        />
+                      ) : (
+                        <div className="doc-loading-view" style={{ padding: '60px 20px' }}>
+                          <div className="doc-spinner" />
+                          <p style={{ marginTop: '12px' }}>Loading PDF document…</p>
                         </div>
-                      </div>
+                      )}
                     </div>
                   );
                 }

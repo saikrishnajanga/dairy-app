@@ -328,11 +328,49 @@ export async function extractDocxText(blob: Blob): Promise<string> {
 }
 
 /**
- * Read the text content of a text-based document (.txt, .md, text/*) or Word (.docx).
+ * Extract text from a PDF document blob using PDF.js.
+ */
+export async function extractPdfText(blob: Blob): Promise<string> {
+  try {
+    const pdfjsLib = await import('pdfjs-dist');
+    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
+    }
+    const arrayBuffer = await blob.arrayBuffer();
+    const loadingTask = pdfjsLib.getDocument({
+      data: arrayBuffer,
+      useSystemFonts: true,
+    });
+    const pdf = await loadingTask.promise;
+    const pagesText: string[] = [];
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageStrings = textContent.items
+        .map((item: any) => ('str' in item ? item.str : ''))
+        .filter(Boolean);
+      if (pageStrings.length > 0) {
+        pagesText.push(pageStrings.join(' '));
+      }
+    }
+
+    if (pagesText.length > 0) {
+      return pagesText.join('\n\n');
+    }
+  } catch (err) {
+    console.warn('PDF text extraction notice:', err);
+  }
+  return '';
+}
+
+/**
+ * Read the text content of a text-based document (.txt, .md, text/*), Word (.docx), or PDF (.pdf).
  */
 export async function getDocumentTextContent(doc: DocumentItem): Promise<string> {
   const blob = await getDocumentBlob(doc);
   const ext = doc.name.split('.').pop()?.toLowerCase() || '';
+
   if (ext === 'docx' || ext === 'doc') {
     const extracted = await extractDocxText(blob);
     if (extracted && extracted.trim()) {
@@ -340,6 +378,15 @@ export async function getDocumentTextContent(doc: DocumentItem): Promise<string>
     }
     return '(Word Document: Use "Edit like Google Doc" to view and edit formatted text)';
   }
+
+  if (ext === 'pdf' || doc.mimeType?.includes('pdf')) {
+    const extracted = await extractPdfText(blob);
+    if (extracted && extracted.trim()) {
+      return extracted;
+    }
+    return '(PDF Document: Tap "Edit like Google Doc" to view and edit extracted text)';
+  }
+
   return await blob.text();
 }
 
