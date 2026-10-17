@@ -41,6 +41,16 @@ interface Props {
   onProfileUpdate?: (updatedProfile?: Profile | null, updatedAccount?: AuthAccount | null) => void;
 }
 
+function isImageUrl(val?: string | null): boolean {
+  if (!val) return false;
+  return (
+    val.startsWith('http://') ||
+    val.startsWith('https://') ||
+    val.startsWith('data:image/') ||
+    val.startsWith('blob:')
+  );
+}
+
 export default function ProfileScreen({
   profile,
   authAccount,
@@ -87,12 +97,16 @@ export default function ProfileScreen({
   const displayEmail = authAccount?.email || profile?.email || 'saikrishna@example.com';
   const provider = authAccount?.provider || profile?.provider || 'local';
   const isVerified = authAccount?.isEmailConfirmed ?? true;
+  const isCloudAccount = Boolean(authAccount?.email);
   const hasLocalPin = Boolean(profile?.pinHash);
 
-  // Compute password strength
+  // Active avatar source
+  const activeAvatarSrc = authAccount?.avatarUrl || profile?.avatarUrl || '';
+
+  // Password strength calculation
   const getPasswordStrength = (pass: string) => {
     if (!pass) return { label: '', level: '' };
-    if (pass.length < 6) return { label: 'Weak (min 6 chars)', level: 'weak' };
+    if (pass.length < 6) return { label: 'Too short (min 6 chars)', level: 'weak' };
     const hasNum = /\d/.test(pass);
     const hasLetter = /[a-zA-Z]/.test(pass);
     const hasSpecial = /[^a-zA-Z0-9]/.test(pass);
@@ -100,7 +114,7 @@ export default function ProfileScreen({
       return { label: 'Strong & Secure', level: 'strong' };
     }
     if (pass.length >= 6 && hasNum && hasLetter) {
-      return { label: 'Good', level: 'fair' };
+      return { label: 'Good Password', level: 'fair' };
     }
     return { label: 'Fair', level: 'fair' };
   };
@@ -147,7 +161,7 @@ export default function ProfileScreen({
         };
       }
 
-      // 2. If signed in with cloud account, update user metadata
+      // 2. If signed in with cloud account, update metadata
       if (authAccount) {
         try {
           const cloudUpdated = await updateAccountProfile({
@@ -172,13 +186,13 @@ export default function ProfileScreen({
     }
   };
 
-  // Password / Security form submit
+  // Password update form submit
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPassError('');
     setPassSuccess('');
 
-    const minLen = provider === 'email' ? 6 : 4;
+    const minLen = isCloudAccount ? 6 : 4;
     if (newPassword.length < minLen) {
       setPassError(`Password must be at least ${minLen} characters.`);
       return;
@@ -192,13 +206,14 @@ export default function ProfileScreen({
     hapticTap();
 
     try {
-      if (provider === 'email') {
+      if (isCloudAccount) {
         // Cloud account password update via Supabase
         await updateAccountPassword(newPassword);
-        setPassSuccess('🛡️ Account password updated successfully!');
+        const msg = `🎉 Password set successfully! You can now log in using ${authAccount?.email} and your new password on any device.`;
+        setPassSuccess(msg);
         showToast('🛡️ Account password updated successfully!');
       } else {
-        // Local profile password / PIN update
+        // Local profile PIN update
         let targetId = profile?.id;
         if (!targetId) {
           const fresh = await createProfile(displayName);
@@ -216,7 +231,6 @@ export default function ProfileScreen({
       setNewPassword('');
       setConfirmPassword('');
       setCurrentPassword('');
-      setTimeout(() => setPassSuccess(''), 4500);
     } catch (err: unknown) {
       setPassError(err instanceof Error ? err.message : 'Could not update password');
     } finally {
@@ -249,14 +263,15 @@ export default function ProfileScreen({
 
   // Send password reset email
   const handleSendResetEmail = async () => {
-    if (!displayEmail) return;
+    const targetEmail = authAccount?.email || displayEmail;
+    if (!targetEmail) return;
     setResetEmailSending(true);
     setPassError('');
     hapticTap();
     try {
-      await sendPasswordResetEmail(displayEmail);
-      setPassSuccess(`📧 Password reset instructions sent to ${displayEmail}`);
-      showToast(`📧 Reset link sent to ${displayEmail}`);
+      await sendPasswordResetEmail(targetEmail);
+      setPassSuccess(`📧 Password reset link sent to ${targetEmail}. Check your inbox!`);
+      showToast(`📧 Reset link sent to ${targetEmail}`);
     } catch (err: unknown) {
       setPassError(err instanceof Error ? err.message : 'Failed to send reset email');
     } finally {
@@ -264,7 +279,7 @@ export default function ProfileScreen({
     }
   };
 
-  // Export full JSON backup (works seamlessly on mobile & web)
+  // Export full JSON backup (works on mobile & web)
   const handleBackupExport = async () => {
     hapticTap();
     try {
@@ -306,17 +321,30 @@ export default function ProfileScreen({
       <div className="profile-content-container">
         {/* User Profile Card */}
         <div className="profile-user-card" style={{ position: 'relative' }}>
+          {/* Avatar Container: NEVER render raw image URL as text */}
           <div className="profile-avatar-large">
-            {editAvatar ? (
-              <span>{editAvatar}</span>
+            {isImageUrl(activeAvatarSrc) ? (
+              <img
+                src={activeAvatarSrc}
+                alt={displayName}
+                className="profile-avatar-large-img"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : activeAvatarSrc && !activeAvatarSrc.includes('/') && activeAvatarSrc.length <= 4 ? (
+              <span style={{ fontSize: '32px' }}>{activeAvatarSrc}</span>
             ) : (
               <span>{displayName.trim().charAt(0).toUpperCase()}</span>
             )}
           </div>
 
-          <div className="profile-user-details" style={{ flex: 1 }}>
+          <div className="profile-user-details" style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <h3 className="profile-display-name">{displayName}</h3>
+              <h3 className="profile-display-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {displayName}
+              </h3>
               <button
                 type="button"
                 className="profile-edit-trigger-btn"
@@ -325,14 +353,16 @@ export default function ProfileScreen({
                   setIsEditingProfile(!isEditingProfile);
                   setEditName(displayName);
                   setEditEmail(displayEmail);
-                  setEditAvatar(authAccount?.avatarUrl || profile?.avatarUrl || '');
+                  setEditAvatar(activeAvatarSrc);
                 }}
               >
                 {isEditingProfile ? '✕ Cancel' : '✏️ Edit Profile'}
               </button>
             </div>
 
-            <p className="profile-email-text">{displayEmail || 'No email associated'}</p>
+            <p className="profile-email-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {displayEmail || 'No email associated'}
+            </p>
 
             <div className="profile-badges-row">
               <span className={`provider-badge ${provider}`}>
@@ -485,19 +515,19 @@ export default function ProfileScreen({
           </div>
         )}
 
-        {/* Account Security & Password Section */}
+        {/* Change Password & Security Section */}
         <div className="profile-section-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
             <div>
               <h4 className="profile-card-title">🔑 Change Password & Security</h4>
               <p className="profile-card-desc">
-                {provider === 'email'
-                  ? 'Manage your cloud account login credentials.'
+                {isCloudAccount
+                  ? `Set or update password for ${authAccount?.email} to log in with Email & Password.`
                   : 'Set or update your personal diary password / lock PIN.'}
               </p>
             </div>
-            <span className={`security-mode-badge ${provider === 'email' ? 'cloud' : 'local'}`}>
-              {provider === 'email' ? '☁️ Cloud Account' : hasLocalPin ? '🔒 PIN Active' : '🔓 Unlocked'}
+            <span className={`security-mode-badge ${isCloudAccount ? 'cloud' : 'local'}`}>
+              {isCloudAccount ? '☁️ Cloud Account' : hasLocalPin ? '🔒 PIN Active' : '🔓 Unlocked'}
             </span>
           </div>
 
@@ -520,8 +550,8 @@ export default function ProfileScreen({
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontSize: '17px' }}>🔑</span>
                 <span style={{ fontWeight: 700 }}>
-                  {provider === 'email'
-                    ? 'Change Account Password'
+                  {isCloudAccount
+                    ? 'Set / Change Email Account Password'
                     : hasLocalPin
                     ? 'Change Profile Password / PIN'
                     : 'Set Profile Password / PIN'}
@@ -535,19 +565,50 @@ export default function ProfileScreen({
             {/* Expandable Password Form */}
             {showPasswordChange && (
               <form onSubmit={handlePasswordChange} className="password-change-form">
+                {/* Informative message for Google-signed in users */}
+                {isCloudAccount && (
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      background: 'rgba(59, 130, 246, 0.08)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(59, 130, 246, 0.25)',
+                      fontSize: '12.5px',
+                      color: 'var(--text)',
+                      lineHeight: '1.5',
+                    }}
+                  >
+                    💡 <strong>Email & Password Login:</strong> You are currently signed in with{' '}
+                    <strong>{authAccount?.email}</strong> via {provider === 'google' ? 'Google' : 'Email'}.
+                    By setting a password below, you can sign in anytime using either Google or with your Email (
+                    <code>{authAccount?.email}</code>) and this password!
+                  </div>
+                )}
+
                 {passError && (
                   <div className="auth-alert error" style={{ padding: '10px 12px', fontSize: '13px' }}>
                     <span>⚠️ {passError}</span>
                   </div>
                 )}
                 {passSuccess && (
-                  <div className="auth-alert success" style={{ padding: '10px 12px', fontSize: '13px', background: 'var(--success-soft)', color: 'var(--success)', border: '1px solid var(--success)' }}>
+                  <div
+                    className="auth-alert success"
+                    style={{
+                      padding: '12px 14px',
+                      fontSize: '13px',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      color: '#10b981',
+                      border: '1px solid #10b981',
+                      borderRadius: '8px',
+                      lineHeight: '1.5',
+                    }}
+                  >
                     <span>{passSuccess}</span>
                   </div>
                 )}
 
                 {/* Current PIN/Password if local profile has PIN */}
-                {hasLocalPin && provider !== 'email' && (
+                {hasLocalPin && !isCloudAccount && (
                   <div className="profile-input-group">
                     <label className="profile-input-label">Current PIN / Password</label>
                     <div className="password-input-row">
@@ -574,13 +635,13 @@ export default function ProfileScreen({
                 {/* New Password Input */}
                 <div className="profile-input-group">
                   <label className="profile-input-label">
-                    {provider === 'email' ? 'New Password (min 6 chars)' : 'New PIN / Password (min 4 chars)'}
+                    {isCloudAccount ? 'New Password (min 6 characters)' : 'New PIN / Password (min 4 characters)'}
                   </label>
                   <div className="password-input-row">
                     <input
                       type={showNewPass ? 'text' : 'password'}
                       className="profile-text-input"
-                      placeholder={provider === 'email' ? 'Enter at least 6 characters' : 'Enter 4+ digits or characters'}
+                      placeholder={isCloudAccount ? 'Enter at least 6 characters' : 'Enter 4+ digits or characters'}
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
                       required
@@ -633,13 +694,13 @@ export default function ProfileScreen({
                     type="submit"
                     className="action-btn primary"
                     disabled={passBusy}
-                    style={{ padding: '9px 20px', borderRadius: '20px', fontWeight: 700 }}
+                    style={{ padding: '10px 22px', borderRadius: '20px', fontWeight: 700 }}
                   >
-                    {passBusy ? 'Updating…' : '✓ Update Password'}
+                    {passBusy ? 'Updating…' : isCloudAccount ? '✓ Set Account Password' : '✓ Update Password'}
                   </button>
 
                   {/* Remove PIN button for local profiles */}
-                  {hasLocalPin && provider !== 'email' && (
+                  {hasLocalPin && !isCloudAccount && (
                     <button
                       type="button"
                       className="action-btn"
@@ -651,7 +712,7 @@ export default function ProfileScreen({
                   )}
 
                   {/* Forgot Password Reset Email for Cloud accounts */}
-                  {provider === 'email' && (
+                  {isCloudAccount && (
                     <button
                       type="button"
                       className="action-btn"

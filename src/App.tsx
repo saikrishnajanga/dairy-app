@@ -535,9 +535,26 @@ export default function App() {
               title={authAccount ? `Signed in as ${authAccount.email}` : 'Profile'}
             >
               <span className="profile-avatar">
-                {authAccount?.avatarUrl || activeProfile?.avatarUrl
-                  ? (authAccount?.avatarUrl || activeProfile?.avatarUrl)
-                  : (authAccount?.name || activeProfile?.name || 'S').trim().charAt(0).toUpperCase()}
+                {(() => {
+                  const av = authAccount?.avatarUrl || activeProfile?.avatarUrl;
+                  const isUrl = av && (av.startsWith('http://') || av.startsWith('https://') || av.startsWith('data:') || av.startsWith('blob:'));
+                  if (isUrl) {
+                    return (
+                      <img
+                        src={av}
+                        alt="Avatar"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    );
+                  }
+                  if (av && !av.includes('/') && av.length <= 4) {
+                    return av;
+                  }
+                  return (authAccount?.name || activeProfile?.name || 'S').trim().charAt(0).toUpperCase();
+                })()}
               </span>
               <span className="profile-chip-name">
                 {authAccount?.name || activeProfile?.name || 'Profile'}
