@@ -4211,6 +4211,7 @@ button:disabled {
 }
 
 .header-round-btn {
+  position: relative;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -6042,21 +6043,31 @@ button:disabled {
   white-space: nowrap;
 }
 
+.notif-btn {
+  position: relative !important;
+}
+
 .notif-badge-count {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  background: var(--danger);
-  color: #fff;
+  top: -3px;
+  right: -3px;
+  background: #ef4444;
+  color: #ffffff;
   font-size: 10px;
   font-weight: 800;
-  min-width: 16px;
-  height: 16px;
+  min-width: 17px;
+  height: 17px;
   border-radius: 9999px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0 4px;
+  border: 2px solid var(--surface, #ffffff);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+  pointer-events: none;
+  z-index: 10;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 /* ─── 6. Locked Diaries Vault Styles ────────────────────────────────────── */

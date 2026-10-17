@@ -510,6 +510,7 @@ export default function App() {
               className="header-round-btn notif-btn"
               onClick={() => setShowNotificationPanel(true)}
               title="Notifications"
+              style={{ position: 'relative' }}
             >
               🔔
               {unreadNotifCount > 0 && (
