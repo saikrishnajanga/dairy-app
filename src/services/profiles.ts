@@ -19,8 +19,7 @@ export interface Profile {
   /** Salted SHA-256 of the optional PIN. */
   pinHash?: string;
   createdAt: number;
-  /** Set for profiles created by "Continue with Google". */
-  provider?: 'google';
+  provider?: 'google' | 'email' | 'local';
   email?: string;
   avatarUrl?: string;
 }
@@ -108,22 +107,21 @@ export function setActiveProfile(id: string) {
   localStorage.setItem(ACTIVE_KEY, id);
 }
 
-/**
- * Create (or re-activate) the profile owned by a Google account.
- * The id is derived from the Google user id, so signing in on any
- * device addresses the same slice of data — that is what makes
- * "log in with Google and everything appears" work.
- */
-export async function ensureGoogleProfile(account: {
+export async function ensureUserProfile(account: {
   id: string;
   name: string;
   email?: string;
   avatarUrl?: string;
+  provider?: 'google' | 'email' | 'local';
 }): Promise<Profile> {
-  const id = `g-${account.id}`;
+  const prefix = account.provider === 'google' ? 'g-' : 'u-';
+  const id = `${prefix}${account.id}`;
   const profiles = read();
   const existing = profiles.find(p => p.id === id);
   if (existing) {
+    if (account.email && !existing.email) existing.email = account.email;
+    if (account.name && existing.name === 'Me') existing.name = account.name;
+    write(profiles);
     setActiveProfile(id);
     return existing;
   }
@@ -132,18 +130,29 @@ export async function ensureGoogleProfile(account: {
     id,
     name: account.name.trim() || 'Me',
     createdAt: Date.now(),
-    provider: 'google',
+    provider: (account.provider as 'google' | 'email') || 'email',
   };
   if (account.email) profile.email = account.email;
   if (account.avatarUrl) profile.avatarUrl = account.avatarUrl;
 
   profiles.push(profile);
   write(profiles);
-  // First profile on the device adopts whatever is already stored.
   if (profiles.length === 1) migrateLegacyData(id);
 
   setActiveProfile(id);
   return profile;
+}
+
+/**
+ * Legacy Google profile helper for backward compatibility
+ */
+export async function ensureGoogleProfile(account: {
+  id: string;
+  name: string;
+  email?: string;
+  avatarUrl?: string;
+}): Promise<Profile> {
+  return ensureUserProfile({ ...account, provider: 'google' });
 }
 
 export function updateProfile(id: string, updates: Partial<Pick<Profile, 'name' | 'pinHash'>>) {

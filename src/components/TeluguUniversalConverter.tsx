@@ -139,39 +139,40 @@ function transliterateTeluguToRoman(text: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────
 
-const TeluguUniversalConverter = () => {
+interface Props {
+  onBack?: () => void;
+  showToast?: (msg: string) => void;
+  onSendToDiary?: (teluguText: string, romanizedText: string) => void;
+}
+
+const TeluguUniversalConverter = ({ onBack, showToast, onSendToDiary }: Props) => {
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
-  const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
+  const [recognition, setRecognition] = useState<any>(null);
   const [mode, setMode] = useState<'speech' | 'text'>('speech');
   const [copied, setCopied] = useState(false);
 
-  // Mobile detection + Speech init
   useEffect(() => {
-    const checkMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-    setIsMobile(checkMobile);
-
-    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-      const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const rec = new SpeechRecognitionCtor();
+    const SR = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SR) {
+      const rec = new SR();
       rec.lang = 'te-IN';
       rec.continuous = true;
       rec.interimResults = true;
 
       rec.onstart = () => setIsListening(true);
-      rec.onresult = (event: SpeechRecognitionEvent) => {
+      rec.onresult = (event: any) => {
         let final = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
+            final += event.results[i][0].transcript + ' ';
           }
         }
         if (final) {
           setInputText(prev => {
-            const newText = prev + final;
+            const newText = (prev + ' ' + final).trim();
             setOutputText(transliterateTeluguToRoman(newText));
             return newText;
           });
@@ -199,6 +200,7 @@ const TeluguUniversalConverter = () => {
     if (!recognition || !isSupported) return;
     if (isListening) {
       recognition.stop();
+      setIsListening(false);
     } else {
       recognition.start();
     }
@@ -214,143 +216,179 @@ const TeluguUniversalConverter = () => {
     if (outputText) {
       await navigator.clipboard.writeText(outputText);
       setCopied(true);
+      showToast?.('📋 Romanized text copied!');
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const buttonStyle: React.CSSProperties = {
-    padding: isMobile ? '18px 30px' : '14px 28px',
-    fontSize: isMobile ? '20px' : '16px',
-    minHeight: isMobile ? '55px' : '48px',
-    borderRadius: '14px',
-    border: 'none',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    touchAction: 'manipulation'
+  const handleSaveToDiary = () => {
+    if (!outputText && !inputText) return;
+    onSendToDiary?.(inputText, outputText);
+    showToast?.('✅ Saved to Diary!');
+  };
+
+  const shareToWhatsApp = () => {
+    if (!outputText && !inputText) return;
+    const textToShare = outputText || inputText;
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToShare)}`;
+    if (navigator.share) {
+      navigator.share({
+        title: 'Telugu Romanized Note',
+        text: textToShare,
+      }).catch(() => {
+        window.open(waUrl, '_blank');
+      });
+    } else {
+      window.open(waUrl, '_blank');
+    }
+    showToast?.('💬 Opening WhatsApp to share...');
   };
 
   return (
-    <div style={{ padding: isMobile ? '20px 15px' : '30px', maxWidth: '100%', margin: '0 auto' }}>
-      <h2 style={{ textAlign: 'center' }}>🔄 Telugu ↔ English Words Converter</h2>
+    <div className="tab-content telugu-converter-screen">
+      <div className="converter-header-row">
+        {onBack && (
+          <button type="button" className="action-btn back-btn" onClick={onBack}>
+            ← Back
+          </button>
+        )}
+        <div>
+          <h2 className="converter-title">🔄 Telugu ↔ English Words Converter</h2>
+          <p className="converter-subtitle">
+            Speak natural Telugu or paste Telugu script to get instant Romanized English letters (e.g., "Ela unnaru?").
+          </p>
+        </div>
+      </div>
 
       {/* Mode Toggle */}
-      <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+      <div className="converter-mode-switch">
         <button
-          onClick={() => setMode(mode === 'speech' ? 'text' : 'speech')}
-          style={{
-            ...buttonStyle,
-            backgroundColor: mode === 'speech' ? '#4CAF50' : '#FF9800',
-            color: 'white'
-          }}
+          type="button"
+          onClick={() => setMode('speech')}
+          className={`converter-mode-btn ${mode === 'speech' ? 'active' : ''}`}
         >
-          {mode === 'speech' ? '🎤 Speech Mode' : '⌨️ Text Paste Mode'}
+          🎙️ Telugu Speech Mode
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('text')}
+          className={`converter-mode-btn ${mode === 'text' ? 'active' : ''}`}
+        >
+          ⌨️ Text Paste Mode
         </button>
       </div>
 
-      {/* Telugu Input */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-          {mode === 'speech' ? '🎙️ Telugu Speech Input' : '📝 Paste Telugu Text'}
-        </label>
+      {/* Telugu Input Card */}
+      <div className="converter-card">
+        <div className="converter-card-header">
+          <label className="converter-label">
+            {mode === 'speech' ? '🎙️ Telugu Speech Recognition' : '📝 Telugu Text Input'}
+          </label>
+          {inputText && (
+            <button
+              type="button"
+              className="action-btn-sm"
+              onClick={() => { setInputText(''); setOutputText(''); }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         <textarea
           value={inputText}
           onChange={handleInputChange}
-          placeholder={mode === 'speech' ? 'Start speaking Telugu...' : 'Paste Telugu text here... (ఏంట్రా...)'}
-          style={{
-            width: '100%',
-            height: '120px',
-            fontSize: '18px',
-            padding: '15px',
-            border: '2px solid #ddd',
-            borderRadius: '12px',
-            fontFamily: 'monospace',
-            boxSizing: 'border-box',
-          }}
+          placeholder={mode === 'speech' ? 'Click Start Speaking and speak natural Telugu...' : 'Paste or type Telugu text here (e.g. ఎలా ఉన్నారు?)...'}
+          className="converter-textarea"
+          rows={4}
         />
+
+        {mode === 'speech' && isSupported && (
+          <div className="converter-speech-action">
+            <button
+              type="button"
+              onClick={toggleListening}
+              className={`action-btn primary large-record-btn ${isListening ? 'danger recording' : ''}`}
+            >
+              {isListening ? '⏹️ Stop Listening' : '🎙️ Start Speaking Telugu'}
+            </button>
+          </div>
+        )}
+
+        {mode === 'text' && (
+          <div className="converter-speech-action">
+            <button
+              type="button"
+              onClick={convertText}
+              className="action-btn primary"
+            >
+              ✨ Convert to English Words
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Speech Controls */}
-      {mode === 'speech' && isSupported && (
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '25px', flexWrap: 'wrap' }}>
-          <button
-            onClick={toggleListening}
-            disabled={!isSupported}
-            style={{
-              ...buttonStyle,
-              backgroundColor: isListening ? '#f44336' : '#4CAF50',
-              color: 'white'
-            }}
-          >
-            {isListening ? '⏹️ Stop' : '🎤 Start Recording'}
-          </button>
+      {/* Output Card */}
+      <div className="converter-card output-card">
+        <div className="converter-card-header">
+          <label className="converter-label highlight">
+            📤 Romanized English Script (Editable)
+          </label>
+          {outputText && (
+            <span className="converted-badge">✓ Phonetic Match</span>
+          )}
         </div>
-      )}
 
-      {/* Convert Button for Text Mode */}
-      {mode === 'text' && (
-        <div style={{ textAlign: 'center', marginBottom: '25px' }}>
-          <button
-            onClick={convertText}
-            style={{
-              ...buttonStyle,
-              backgroundColor: '#2196F3',
-              color: 'white',
-              padding: isMobile ? '20px 40px' : '16px 32px'
-            }}
-          >
-            ✨ Convert to English Words
-          </button>
-        </div>
-      )}
+        <textarea
+          value={outputText}
+          onChange={handleOutputChange}
+          placeholder="Romanized English transliteration appears here automatically (e.g. Ela unnaru? Nenu bagunnanu)..."
+          className="converter-textarea output-textarea"
+          rows={5}
+        />
 
-      {/* Output — Editable */}
-      <div>
-        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-          📤 English-like Text (Editable & Ready to Copy)
-        </label>
-        <div style={{
-          border: '2px solid #4CAF50',
-          borderRadius: '16px',
-          padding: '20px',
-          minHeight: '150px',
-          background: '#f1f8e9'
-        }}>
-          <textarea
-            value={outputText}
-            onChange={handleOutputChange}
-            placeholder="Converted text will appear here... You can also edit it."
-            style={{
-              width: '100%',
-              height: '140px',
-              fontSize: '18px',
-              fontFamily: 'monospace',
-              border: 'none',
-              background: 'transparent',
-              resize: 'none',
-              boxSizing: 'border-box',
-              outline: 'none',
-            }}
-          />
-        </div>
+        {outputText && (
+          <div className="converter-actions-row">
+            <button
+              type="button"
+              onClick={shareToWhatsApp}
+              className="action-btn"
+              style={{
+                background: '#25d366',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 700,
+                boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)',
+              }}
+            >
+              💬 Share to WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={copyOutput}
+              className="action-btn primary"
+            >
+              {copied ? '✅ Copied!' : '📋 Copy Output'}
+            </button>
+            {onSendToDiary && (
+              <button
+                type="button"
+                onClick={handleSaveToDiary}
+                className="action-btn accent"
+              >
+                💾 Save as Diary Note
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setInputText(''); setOutputText(''); }}
+              className="action-btn"
+            >
+              🗑️ Clear All
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* Action Buttons */}
-      {outputText && (
-        <div style={{
-          display: 'flex',
-          gap: '12px',
-          marginTop: '20px',
-          justifyContent: 'center',
-          flexDirection: isMobile ? 'column' : 'row'
-        }}>
-          <button onClick={copyOutput} style={{ ...buttonStyle, backgroundColor: copied ? '#4CAF50' : '#FF5722', color: 'white' }}>
-            {copied ? '✅ Copied!' : '📋 Copy Output'}
-          </button>
-          <button onClick={() => { setInputText(''); setOutputText(''); }} style={{ ...buttonStyle, backgroundColor: '#757575', color: 'white' }}>
-            🗑️ Clear All
-          </button>
-        </div>
-      )}
     </div>
   );
 };

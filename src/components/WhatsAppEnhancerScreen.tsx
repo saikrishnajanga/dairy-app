@@ -138,6 +138,28 @@ export default function WhatsAppEnhancerScreen({
     }
   };
 
+  // Handle Direct Share to WhatsApp
+  const handleShareToWhatsApp = () => {
+    hapticTap();
+    if (!outputResult?.result) {
+      showToast('⚠️ No extracted text to share');
+      return;
+    }
+    const textToShare = outputResult.result;
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToShare)}`;
+    if (navigator.share) {
+      navigator.share({
+        title: 'VoiceDiary WhatsApp Export',
+        text: textToShare,
+      }).catch(() => {
+        window.open(waUrl, '_blank');
+      });
+    } else {
+      window.open(waUrl, '_blank');
+    }
+    showToast('💬 Opening WhatsApp to share...');
+  };
+
   // Text to Speech
   const handleSpeak = () => {
     hapticTap();
@@ -334,11 +356,24 @@ Example:
           {hasOutput && (
             <div className="wa-card-actions">
               <button
-                className={`wa-btn-primary ${isCopied ? 'copied' : ''}`}
+                className="wa-btn-primary"
+                onClick={handleShareToWhatsApp}
+                title="Send directly to WhatsApp chat or contact"
+                style={{
+                  background: 'linear-gradient(135deg, #25d366, #128c7e)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  boxShadow: '0 4px 12px rgba(37, 211, 102, 0.35)',
+                }}
+              >
+                💬 Share on WhatsApp
+              </button>
+              <button
+                className={`wa-btn-secondary ${isCopied ? 'copied' : ''}`}
                 onClick={handleCopy}
                 title="Copy continuous text to clipboard"
               >
-                {isCopied ? '✓ Copied!' : '📋 Copy Extracted Text'}
+                {isCopied ? '✓ Copied!' : '📋 Copy Text'}
               </button>
               <button
                 className="wa-btn-secondary"

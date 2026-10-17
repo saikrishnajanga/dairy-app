@@ -1,0 +1,162 @@
+import { useState, useEffect, useCallback } from 'react';
+import {
+  getNotifications,
+  markNotificationAsRead,
+  clearAllNotifications,
+  isReminderEnabled,
+  setReminderEnabled,
+  getReminderTime,
+  setReminderTime,
+} from '../services/notifications';
+import type { AppNotification } from '../services/db';
+import { hapticTap } from '../services/utils';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  showToast: (msg: string) => void;
+}
+
+export default function NotificationPanel({ isOpen, onClose, showToast }: Props) {
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [reminderActive, setReminderActive] = useState(isReminderEnabled());
+  const [reminderTimeVal, setReminderTimeVal] = useState(getReminderTime());
+
+  const loadNotifs = useCallback(async () => {
+    const list = await getNotifications();
+    setNotifications(list);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadNotifs();
+    }
+  }, [isOpen, loadNotifs]);
+
+  if (!isOpen) return null;
+
+  const handleMarkRead = async (id: string) => {
+    hapticTap();
+    await markNotificationAsRead(id);
+    await loadNotifs();
+  };
+
+  const handleClearAll = async () => {
+    hapticTap();
+    await clearAllNotifications();
+    await loadNotifs();
+    showToast('Notifications cleared');
+  };
+
+  const handleToggleReminder = () => {
+    const next = !reminderActive;
+    setReminderActive(next);
+    setReminderEnabled(next);
+    showToast(next ? '🔔 Daily journal reminder enabled' : '🔕 Reminder disabled');
+  };
+
+  const handleReminderTimeChange = (time: string) => {
+    setReminderTimeVal(time);
+    setReminderTime(time);
+  };
+
+  const formatTimestamp = (ts: number) => {
+    const diffMs = Date.now() - ts;
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  const getNotifIcon = (type: AppNotification['type']) => {
+    switch (type) {
+      case 'success': return '✅';
+      case 'warning': return '⚠️';
+      case 'error': return '❌';
+      case 'security': return '🛡️';
+      default: return 'ℹ️';
+    }
+  };
+
+  return (
+    <div className="pin-overlay" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="notification-drawer" onClick={e => e.stopPropagation()}>
+        <div className="notif-header">
+          <div className="notif-header-title-row">
+            <h3>🔔 Notifications</h3>
+            <button type="button" className="notif-close-btn" onClick={onClose}>
+              ✕
+            </button>
+          </div>
+
+          <div className="notif-reminder-toggle-bar">
+            <div className="reminder-info">
+              <span className="reminder-title">Daily Journal Reminder</span>
+              <span className="reminder-desc">Gentle prompt to reflect each day</span>
+            </div>
+            <div className="reminder-actions-group">
+              {reminderActive && (
+                <input
+                  type="time"
+                  className="reminder-time-input"
+                  value={reminderTimeVal}
+                  onChange={e => handleReminderTimeChange(e.target.value)}
+                />
+              )}
+              <button
+                type="button"
+                className={`toggle-switch ${reminderActive ? 'active' : ''}`}
+                onClick={handleToggleReminder}
+                aria-label="Toggle daily reminder"
+              >
+                <div className="toggle-knob" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="notif-body">
+          {notifications.length === 0 ? (
+            <div className="notif-empty">
+              <span className="notif-empty-icon">🔕</span>
+              <p className="notif-empty-title">All caught up!</p>
+              <p className="notif-empty-desc">
+                Important account, sync, and security updates will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="notif-list">
+              {notifications.map(notif => (
+                <div
+                  key={notif.id}
+                  className={`notif-item ${notif.read ? 'read' : 'unread'}`}
+                  onClick={() => !notif.read && handleMarkRead(notif.id)}
+                >
+                  <span className="notif-type-icon">{getNotifIcon(notif.type)}</span>
+                  <div className="notif-item-content">
+                    <div className="notif-item-top">
+                      <h4 className="notif-item-title">{notif.title}</h4>
+                      <span className="notif-time">{formatTimestamp(notif.timestamp)}</span>
+                    </div>
+                    <p className="notif-message">{notif.message}</p>
+                  </div>
+                  {!notif.read && <span className="notif-unread-dot" />}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {notifications.length > 0 && (
+          <div className="notif-footer">
+            <button type="button" className="action-btn text-btn" onClick={handleClearAll}>
+              Clear All Notifications
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

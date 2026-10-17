@@ -1,33 +1,48 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import VoiceRecorder from './components/VoiceRecorder'
-import DiaryList from './components/DiaryList'
-import TranslatorScreen from './components/TranslatorScreen'
-import TextDiaryScreen from './components/TextDiaryScreen'
-import WhatsAppEnhancerScreen from './components/WhatsAppEnhancerScreen'
-import AppLock from './components/AppLock'
-import PrivacyScreen from './components/PrivacyScreen'
-import Onboarding, { needsOnboarding } from './components/Onboarding'
-import ProfileGate from './components/ProfileGate'
-import ProfileSwitcher from './components/ProfileSwitcher'
-import { useToast } from './hooks/useToast'
+import { useState, useCallback, useEffect, useRef } from 'react';
+import SplashAnimation from './components/SplashAnimation';
+import AuthModal from './components/AuthModal';
+import FullScreenEditor from './components/FullScreenEditor';
+import DatePickerModal from './components/DatePickerModal';
+import LockedDiariesScreen from './components/LockedDiariesScreen';
+import DocumentsScreen from './components/DocumentsScreen';
+import VoiceJournalScreen from './components/VoiceJournalScreen';
+import NotificationPanel from './components/NotificationPanel';
+import ProfileScreen from './components/ProfileScreen';
+import VoiceRecorder from './components/VoiceRecorder';
+import DiaryList from './components/DiaryList';
+import TranslatorScreen from './components/TranslatorScreen';
+import TextDiaryScreen from './components/TextDiaryScreen';
+import WhatsAppEnhancerScreen from './components/WhatsAppEnhancerScreen';
+import TeluguUniversalConverter from './components/TeluguUniversalConverter';
+import AppLock from './components/AppLock';
+import Onboarding, { needsOnboarding } from './components/Onboarding';
+import ProfileSwitcher from './components/ProfileSwitcher';
+import ResetPasswordModal from './components/ResetPasswordModal';
+import { useToast } from './hooks/useToast';
 import {
   saveEntry, getEntries, deleteEntry, updateEntry, toggleFavorite,
   searchEntries, exportEntries, getEntryCount, exportAllData, DiaryEntry,
   resetEntriesCache,
-} from './services/storage'
-import { getTextEntryCount, resetTextDiaryCache } from './services/textDiary'
+} from './services/storage';
 import {
-  listProfiles, getActiveProfile, clearActiveProfile, ensureGoogleProfile,
+  getTextEntryCount,
+  resetTextDiaryCache,
+  createTextEntry,
+  type TextDiaryEntry,
+} from './services/textDiary';
+import {
+  listProfiles, getActiveProfile, clearActiveProfile, ensureUserProfile,
   type Profile,
-} from './services/profiles'
-import { initAuth, signInWithGoogle, signOut, type GoogleAccount } from './services/auth'
-import { pullFromCloud, pushAllToCloud } from './services/cloudSync'
-import { isSupabaseConfigured } from './services/supabase'
-import { exportVoiceEntriesDocx } from './services/docExport'
-import { hapticTap } from './services/utils'
-import type { AuthChangeEvent } from '@supabase/supabase-js'
+} from './services/profiles';
+import { initAuth, signInWithGoogle, signOut, onPasswordRecoveryTriggered, type AuthAccount } from './services/auth';
+import { pullFromCloud, pushAllToCloud } from './services/cloudSync';
+import { isSupabaseConfigured } from './services/supabase';
+import { exportVoiceEntriesDocx } from './services/docExport';
+import { getNotifications } from './services/notifications';
+import { hapticTap } from './services/utils';
+import type { AuthChangeEvent } from '@supabase/supabase-js';
 
-type Tab = 'home' | 'translate' | 'diary' | 'whatsapp' | 'privacy'
+export type Tab = 'home' | 'voice' | 'diary' | 'locked' | 'documents' | 'whatsapp' | 'telugu_converter' | 'translate' | 'profile';
 
 export const PALETTES = [
   { id: 'cozy', label: 'Cozy Café', swatch: '#f59e0b', desc: 'Mocha & Honey' },
@@ -40,218 +55,287 @@ export const PALETTES = [
 export type PaletteId = typeof PALETTES[number]['id'];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('home')
-  const [entries, setEntries] = useState<DiaryEntry[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [sortNewest, setSortNewest] = useState(true)
-  const [showFavOnly, setShowFavOnly] = useState(false)
+  // Startup Splash state
+  const [splashFinished, setSplashFinished] = useState(false);
+
+  // Authentication & Guest Mode
+  const [authAccount, setAuthAccount] = useState<AuthAccount | null>(null);
+  const [isGuest, setIsGuest] = useState(() => localStorage.getItem('vd_guest_mode') === 'true');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+
+  // Navigation & Active Screen
+  const [tab, setTab] = useState<Tab>('home');
+  const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortNewest, setSortNewest] = useState(true);
+  const [showFavOnly, setShowFavOnly] = useState(false);
+
+  // Full Screen Editor state
+  const [activeEditorEntry, setActiveEditorEntry] = useState<TextDiaryEntry | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Notifications
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+  // Theme & Appearance
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     (localStorage.getItem('vd_theme') as 'dark' | 'light') || 'dark'
-  )
+  );
   const [palette, setPalette] = useState<PaletteId>(() => {
-    return (localStorage.getItem('vd_palette') as PaletteId) || 'cozy'
-  })
-  const [showPaletteMenu, setShowPaletteMenu] = useState(false)
-  const toast = useToast()
-  const [showOnboarding, setShowOnboarding] = useState(needsOnboarding)
+    return (localStorage.getItem('vd_palette') as PaletteId) || 'cozy';
+  });
 
-  const [voiceCount, setVoiceCount] = useState(0)
-  const [diaryCount, setDiaryCount] = useState(0)
+  const toast = useToast();
+  const [showOnboarding, setShowOnboarding] = useState(needsOnboarding);
 
-  // ─── On-device profiles ───
-  const [profiles, setProfiles] = useState<Profile[]>(() => listProfiles())
-  const [activeProfile, setActiveProfileState] = useState<Profile | null>(() => getActiveProfile())
-  const [showProfiles, setShowProfiles] = useState(false)
-  const [skipProfileGate, setSkipProfileGate] = useState(false)
+  const [voiceCount, setVoiceCount] = useState(0);
+  const [diaryCount, setDiaryCount] = useState(0);
 
-  // Google account currently signed in (null when signed out / offline).
-  const [googleUser, setGoogleUser] = useState<GoogleAccount | null>(null)
+  // Profiles
+  const [profiles, setProfiles] = useState<Profile[]>(() => listProfiles());
+  const [activeProfile, setActiveProfileState] = useState<Profile | null>(() => getActiveProfile());
+  const [showProfiles, setShowProfiles] = useState(false);
+
+  // Theme application
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('vd_theme', theme);
+  }, [theme]);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('vd_theme', theme)
-  }, [theme])
+    document.documentElement.setAttribute('data-palette', palette);
+    localStorage.setItem('vd_palette', palette);
+  }, [palette]);
+
+  // Load unread notification count
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const list = await getNotifications();
+      const unread = list.filter(n => !n.read).length;
+      setUnreadNotifCount(unread);
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-palette', palette)
-    localStorage.setItem('vd_palette', palette)
-  }, [palette])
-
-  useEffect(() => {
-    if (!showPaletteMenu) return
-    const handleOutsideClick = () => setShowPaletteMenu(false)
-    window.addEventListener('click', handleOutsideClick)
-    return () => window.removeEventListener('click', handleOutsideClick)
-  }, [showPaletteMenu])
+    void refreshNotifications();
+  }, [refreshNotifications, showNotificationPanel]);
 
   const loadEntries = useCallback(() => {
-    let data = searchQuery ? searchEntries(searchQuery) : getEntries()
-    if (showFavOnly) data = data.filter(e => e.favorite)
-    setEntries(sortNewest ? data : [...data].reverse())
-    setVoiceCount(getEntryCount())
-    setDiaryCount(getTextEntryCount())
-  }, [searchQuery, sortNewest, showFavOnly])
+    let data = searchQuery ? searchEntries(searchQuery) : getEntries();
+    if (showFavOnly) data = data.filter(e => e.favorite);
+    setEntries(sortNewest ? data : [...data].reverse());
+    setVoiceCount(getEntryCount());
+    setDiaryCount(getTextEntryCount());
+  }, [searchQuery, sortNewest, showFavOnly]);
 
-  useEffect(() => { loadEntries() }, [loadEntries])
+  useEffect(() => { loadEntries(); }, [loadEntries]);
 
-  // The auth listener is created exactly once; it reads the latest
-  // callbacks through refs instead of re-subscribing on every render.
-  const loadEntriesRef = useRef(loadEntries)
-  const toastRef = useRef(toast)
+  const loadEntriesRef = useRef(loadEntries);
+  const toastRef = useRef(toast);
   useEffect(() => {
-    loadEntriesRef.current = loadEntries
-    toastRef.current = toast
-  }, [loadEntries, toast])
+    loadEntriesRef.current = loadEntries;
+    toastRef.current = toast;
+  }, [loadEntries, toast]);
 
-  /**
-   * After a profile is created, switched or deleted the profile-scoped
-   * caches must be dropped, otherwise one person's entries would keep
-   * showing up in the other person's diary.
-   */
   const handleProfileChanged = useCallback(() => {
-    resetEntriesCache()
-    resetTextDiaryCache()
-    setProfiles(listProfiles())
-    setActiveProfileState(getActiveProfile())
-    loadEntries()
-  }, [loadEntries])
+    resetEntriesCache();
+    resetTextDiaryCache();
+    setProfiles(listProfiles());
+    setActiveProfileState(getActiveProfile());
+    loadEntries();
+  }, [loadEntries]);
 
-  // ─── Google login (Supabase Auth) ───
-  // On sign-in the app hands itself over to the Google account's own
-  // profile (created on demand) and merges the cloud diary down into it,
-  // so everything appears the moment the account is known.
+  // ─── Authentication Listener ──────────────────────────────
   useEffect(() => {
-    const handleAuth = async (account: GoogleAccount | null, event: AuthChangeEvent) => {
+    const handleAuth = async (account: AuthAccount | null, event: AuthChangeEvent) => {
       if (!account) {
-        if (event !== 'SIGNED_OUT') return
-        setGoogleUser(null)
-        const active = getActiveProfile()
-        if (active?.provider !== 'google') return
-        // Data stays on the device — but leave the Google profile's view
-        // and ask which profile to use next.
-        clearActiveProfile()
-        resetEntriesCache()
-        resetTextDiaryCache()
-        setProfiles(listProfiles())
-        setActiveProfileState(null)
-        loadEntriesRef.current()
-        setShowProfiles(true)
-        toastRef.current.show('👋 Signed out of Google')
-        return
+        if (event !== 'SIGNED_OUT') return;
+        setAuthAccount(null);
+        const active = getActiveProfile();
+        if (active?.provider === 'google' || active?.provider === 'email') {
+          clearActiveProfile();
+          resetEntriesCache();
+          resetTextDiaryCache();
+          setProfiles(listProfiles());
+          setActiveProfileState(null);
+          loadEntriesRef.current();
+          toastRef.current.show('👋 Signed out');
+        }
+        return;
       }
 
-      setGoogleUser(account)
-      const fresh = event === 'SIGNED_IN'
-      const initial = event === 'INITIAL_SESSION'
-      if (!fresh && !initial) return
+      setAuthAccount(account);
+      setShowAuthModal(false);
 
-      // A session restored on app start must not hijack a local profile
-      // the user was looking at — only a fresh "Continue with Google"
-      // switches the whole app over.
-      const active = getActiveProfile()
-      if (initial && active && !(active.provider === 'google' && active.id === `g-${account.id}`)) return
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowResetPasswordModal(true);
+        toastRef.current.show('🔑 Reset link verified! Please enter your new password.');
+        return;
+      }
+
+      const fresh = event === 'SIGNED_IN';
+      const initial = event === 'INITIAL_SESSION';
+      if (!fresh && !initial) return;
 
       try {
-        await ensureGoogleProfile(account)
-        const pulled = await pullFromCloud()
-        resetEntriesCache()
-        resetTextDiaryCache()
-        setProfiles(listProfiles())
-        setActiveProfileState(getActiveProfile())
-        loadEntriesRef.current()
-        void pushAllToCloud() // upload anything that only exists on this device
+        await ensureUserProfile(account);
+        const pulled = await pullFromCloud();
+        resetEntriesCache();
+        resetTextDiaryCache();
+        setProfiles(listProfiles());
+        setActiveProfileState(getActiveProfile());
+        loadEntriesRef.current();
+        void pushAllToCloud();
         if (fresh) {
           toastRef.current.show(pulled
-            ? '☁️ Signed in — all your entries are here'
-            : '👋 Signed in with Google')
+            ? '☁️ Signed in — entries synced'
+            : `👋 Welcome ${account.name || 'User'}!`);
         }
       } catch (e) {
-        if (fresh) toastRef.current.show('Sync failed: ' + (e instanceof Error ? e.message : e))
+        if (fresh) toastRef.current.show('Sync note: ' + (e instanceof Error ? e.message : e));
       }
+    };
+    return initAuth((account, event) => { void handleAuth(account, event); });
+  }, []);
+
+  // Listen for Password Recovery deep links or hash params
+  useEffect(() => {
+    const unsub = onPasswordRecoveryTriggered(() => {
+      setShowResetPasswordModal(true);
+      setShowAuthModal(false);
+    });
+
+    try {
+      if (
+        window.location.hash.includes('type=recovery') ||
+        window.location.hash.includes('reset-password') ||
+        window.location.href.includes('reset-password') ||
+        window.location.search.includes('type=recovery')
+      ) {
+        setShowResetPasswordModal(true);
+        setShowAuthModal(false);
+      }
+    } catch { /* ignore */ }
+
+    return unsub;
+  }, []);
+
+  // Handle Splash complete
+  const handleSplashFinish = () => {
+    setSplashFinished(true);
+    // If not logged in, not guest, and no local profile, prompt auth
+    if (!authAccount && !isGuest && profiles.length === 0) {
+      setShowAuthModal(true);
     }
-    return initAuth((account, event) => { void handleAuth(account, event) })
-  }, [])
+  };
+
+  const handleContinueAsGuest = () => {
+    setIsGuest(true);
+    localStorage.setItem('vd_guest_mode', 'true');
+    setShowAuthModal(false);
+    toast.show('📱 Continuing offline in Guest Mode');
+  };
+
+  const handleAuthSuccess = (acc?: AuthAccount) => {
+    if (acc) setAuthAccount(acc);
+    setShowAuthModal(false);
+  };
 
   const handleGoogleSignIn = async () => {
     if (!isSupabaseConfigured()) {
-      toast.show('⚙️ Cloud login not set up — add Supabase keys (.env.local), see SETUP_GOOGLE_LOGIN.md')
-      return
+      toast.show('⚙️ Cloud login not set up — add keys to .env.local');
+      return;
     }
     try {
-      await signInWithGoogle()
-      toast.show('🌐 Finish signing in on the Google page')
+      await signInWithGoogle();
     } catch (e) {
-      toast.show('Google sign-in failed: ' + (e instanceof Error ? e.message : e))
+      toast.show('Google sign-in error: ' + (e instanceof Error ? e.message : e));
     }
-  }
+  };
 
   const handleSignOut = async () => {
     try {
-      await signOut()
+      await signOut();
+      setAuthAccount(null);
+      setIsGuest(false);
+      localStorage.removeItem('vd_guest_mode');
+      setTab('home');
+      toast.show('Signed out');
     } catch (e) {
-      toast.show('Sign out failed: ' + (e instanceof Error ? e.message : e))
+      toast.show('Sign out error: ' + (e instanceof Error ? e.message : e));
     }
-  }
+  };
+
+  // ─── New Note Workflow (Date Picker -> Full Screen Editor) ──
+  const handleNewNoteClick = () => {
+    hapticTap();
+    setShowDatePicker(true);
+  };
+
+  const handleProceedNewNote = (entryDate: string, title: string) => {
+    setShowDatePicker(false);
+    const newEntry = createTextEntry(title, '', entryDate);
+    setActiveEditorEntry(newEntry);
+  };
 
   const handleSave = (teluguText: string, romanizedText: string) => {
-    const { ok } = saveEntry(teluguText, romanizedText)
-    loadEntries()
-    toast.show(ok ? '✅ Entry saved!' : '⚠️ Storage full! Export & delete old entries.')
-  }
+    const { ok } = saveEntry(teluguText, romanizedText);
+    loadEntries();
+    toast.show(ok ? '✅ Entry saved!' : '⚠️ Storage full! Export & delete old entries.');
+  };
 
-  const handleDelete = (id: string) => { deleteEntry(id); loadEntries(); toast.show('🗑️ Entry deleted') }
-  const handleUpdate = (id: string, text: string) => { updateEntry(id, { romanizedText: text }); loadEntries(); toast.show('✏️ Entry updated') }
-  const handleFavorite = (id: string) => { toggleFavorite(id); loadEntries() }
+  const handleDelete = (id: string) => { deleteEntry(id); loadEntries(); toast.show('🗑️ Entry deleted'); };
+  const handleUpdate = (id: string, text: string) => { updateEntry(id, { romanizedText: text }); loadEntries(); toast.show('✏️ Entry updated'); };
+  const handleFavorite = (id: string) => { toggleFavorite(id); loadEntries(); };
 
   const handleShare = async (entry: DiaryEntry) => {
-    const text = `${entry.romanizedText}\n\n${entry.teluguText ? `(${entry.teluguText})` : ''}\n— VoiceDiary ${entry.date}`
-    try { await navigator.clipboard.writeText(text); toast.show('📋 Copied!') }
-    catch { toast.show('📋 Could not copy') }
-  }
+    const text = `${entry.romanizedText}\n\n${entry.teluguText ? `(${entry.teluguText})` : ''}\n— VoiceDiary ${entry.date}`;
+    try { await navigator.clipboard.writeText(text); toast.show('📋 Copied!'); }
+    catch { toast.show('📋 Could not copy'); }
+  };
 
-  // ─── Save as Google Doc / Word (.docx) ───
   const handleExportDocx = async (entry?: DiaryEntry) => {
-    const list = entry ? [entry] : entries
-    if (list.length === 0) { toast.show('No entries to export'); return }
+    const list = entry ? [entry] : entries;
+    if (list.length === 0) { toast.show('No entries to export'); return; }
     try {
-      const result = await exportVoiceEntriesDocx(list)
-      toast.show(result === 'shared'
-        ? '📄 Pick Drive or Docs to save it as a Google Doc'
-        : '📄 Saved — open it with Google Docs')
+      const result = await exportVoiceEntriesDocx(list);
+      toast.show(result === 'shared' ? '📄 Ready to share' : '📄 Saved docx');
     } catch (e) {
-      toast.show('Doc export failed: ' + (e instanceof Error ? e.message : e))
+      toast.show('Export failed: ' + (e instanceof Error ? e.message : e));
     }
-  }
+  };
 
   const handleExport = async () => {
-    const text = exportEntries()
-    if (!text) { toast.show('No entries to export'); return }
+    const text = exportEntries();
+    if (!text) { toast.show('No entries to export'); return; }
     try {
-      const blob = new Blob([text], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = `voicediary_${new Date().toISOString().slice(0, 10)}.txt`
-      a.click(); URL.revokeObjectURL(url)
-      toast.show('📥 Exported!')
-    } catch { toast.show('Export failed') }
-  }
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `voicediary_${new Date().toISOString().slice(0, 10)}.txt`;
+      a.click(); URL.revokeObjectURL(url);
+      toast.show('📥 Exported!');
+    } catch { toast.show('Export failed'); }
+  };
 
   const handleBackup = () => {
     try {
-      const json = exportAllData()
-      const blob = new Blob([json], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = `voicediary_backup_${new Date().toISOString().slice(0, 10)}.json`
-      a.click(); URL.revokeObjectURL(url)
-      toast.show('💾 Full backup exported!')
-    } catch { toast.show('Backup failed') }
-  }
+      const json = exportAllData();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `voicediary_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click(); URL.revokeObjectURL(url);
+      toast.show('💾 Full backup exported!');
+    } catch { toast.show('Backup failed'); }
+  };
 
-  const journalDays = Array.from(new Set(entries.map(e => e.date))).length
-  const nowTs = Date.now()
-  const sevenDaysAgo = nowTs - 7 * 24 * 60 * 60 * 1000
-  const recentEntries = entries.filter(e => e.timestamp >= sevenDaysAgo)
+  const journalDays = Array.from(new Set(entries.map(e => e.date))).length;
+  const nowTs = Date.now();
+  const sevenDaysAgo = nowTs - 7 * 24 * 60 * 60 * 1000;
+  const recentEntries = entries.filter(e => e.timestamp >= sevenDaysAgo);
   const totalWords = entries.reduce((acc, e) => {
     const entryAny = e as unknown as Record<string, unknown>;
     const telugu = (e.teluguText || (entryAny.content as string) || '');
@@ -260,247 +344,650 @@ export default function App() {
     return acc + text.split(/\s+/).filter(Boolean).length;
   }, 0);
 
-  // Find most frequent mood tag if any
-  const moodCounts: Record<string, number> = {};
-  entries.forEach(e => {
-    const entryAny = e as unknown as Record<string, unknown>;
-    const text = (e.teluguText || (entryAny.content as string) || '') + ' ' + (e.romanizedText || (entryAny.romanizedContent as string) || '');
-    const match = text.match(/\[(😊|😌|💭|🙏|⚡|🌧️)\s*([A-Za-z]+)\]/);
-    if (match) {
-      const tag = `${match[1]} ${match[2]}`;
-      moodCounts[tag] = (moodCounts[tag] || 0) + 1;
-    }
-  });
-  const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+  // Show Splash Animation on startup (Requirement 3 & 4)
+  if (!splashFinished) {
+    return <SplashAnimation onFinish={handleSplashFinish} durationMs={3000} />;
+  }
+
+  // Show full-screen editor if currently editing a note (Requirement 5)
+  if (activeEditorEntry) {
+    return (
+      <FullScreenEditor
+        entry={activeEditorEntry}
+        onBack={() => {
+          setActiveEditorEntry(null);
+          loadEntries();
+        }}
+        onDelete={() => {
+          setActiveEditorEntry(null);
+          loadEntries();
+        }}
+        showToast={toast.show}
+      />
+    );
+  }
 
   return (
     <AppLock>
-    <div className="app">
-      {/* Header */}
-      <header className="app-header">
-        <div className="app-brand" onClick={() => setTab('home')} style={{ cursor: 'pointer' }} role="button" tabIndex={0}>
-          <div className="brand-logo-container">
-            <img src="/logo.png" alt="VoiceDiary Logo" className="app-logo" />
+      <div className="app">
+        {/* Header */}
+        <header className="app-header">
+          <div
+            className="app-brand"
+            onClick={() => setTab('home')}
+            style={{ cursor: 'pointer' }}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="brand-logo-container">
+              <img src="/logo.png" alt="VoiceDiary Logo" className="app-logo" />
+            </div>
+            <div className="app-brand-text">
+              <div className="app-title">VoiceDiary <span className="app-title-pro">Pro</span></div>
+              <div className="app-subtitle">Private Voice & Thought Journal</div>
+            </div>
           </div>
-          <div className="app-brand-text">
-            <div className="app-title">VoiceDiary <span className="app-title-pro">Pro</span></div>
-            <div className="app-subtitle">Your Private Voice & Thought Journal</div>
+
+          {/* Desktop Navigation */}
+          <nav className="desktop-nav" aria-label="Main Navigation">
+            <button
+              className={`desktop-nav-link ${tab === 'home' ? 'active' : ''}`}
+              onClick={() => setTab('home')}
+            >
+              <span className="nav-icon">🏠</span> Dashboard
+            </button>
+            <button
+              className={`desktop-nav-link ${tab === 'whatsapp' ? 'active' : ''}`}
+              onClick={() => setTab('whatsapp')}
+            >
+              <span className="nav-icon">💬</span> WhatsApp
+            </button>
+            <button
+              className={`desktop-nav-link ${tab === 'telugu_converter' ? 'active' : ''}`}
+              onClick={() => setTab('telugu_converter')}
+            >
+              <span className="nav-icon">🔄</span> Telugu Words
+            </button>
+            <button
+              className={`desktop-nav-link ${tab === 'voice' ? 'active' : ''}`}
+              onClick={() => setTab('voice')}
+            >
+              <span className="nav-icon">🎙️</span> Voice Journal
+            </button>
+            <button
+              className={`desktop-nav-link ${tab === 'diary' ? 'active' : ''}`}
+              onClick={() => setTab('diary')}
+            >
+              <span className="nav-icon">✍️</span> Notebook
+              {diaryCount > 0 && <span className="nav-badge">{diaryCount}</span>}
+            </button>
+            <button
+              className={`desktop-nav-link ${tab === 'locked' ? 'active' : ''}`}
+              onClick={() => setTab('locked')}
+            >
+              <span className="nav-icon">🔒</span> Locked Vault
+            </button>
+            <button
+              className={`desktop-nav-link ${tab === 'documents' ? 'active' : ''}`}
+              onClick={() => setTab('documents')}
+            >
+              <span className="nav-icon">📁</span> Documents
+            </button>
+            <button
+              className={`desktop-nav-link ${tab === 'translate' ? 'active' : ''}`}
+              onClick={() => setTab('translate')}
+            >
+              <span className="nav-icon">🌐</span> Translator
+            </button>
+          </nav>
+
+          <div className="header-actions">
+            {/* Direct Sign In Button for Laptop / Desktop if not signed in */}
+            {!authAccount && (
+              <button
+                type="button"
+                className="action-btn signin-header-btn"
+                onClick={() => setShowAuthModal(true)}
+                title="Sign in with Google or Email to sync across devices"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  background: 'linear-gradient(135deg, rgba(66, 133, 244, 0.15), rgba(52, 168, 83, 0.15))',
+                  border: '1.5px solid rgba(66, 133, 244, 0.45)',
+                  color: 'var(--text)',
+                  borderRadius: '20px',
+                  padding: '6px 14px',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>🔑 Sign In</span>
+              </button>
+            )}
+
+            {/* New Note Button (Fast Access) */}
+            <button
+              type="button"
+              className="action-btn primary header-new-note-btn"
+              onClick={handleNewNoteClick}
+              title="Create new diary entry with date"
+            >
+              ✍️ New Note
+            </button>
+
+            {/* Notification Bell */}
+            <button
+              type="button"
+              className="header-round-btn notif-btn"
+              onClick={() => setShowNotificationPanel(true)}
+              title="Notifications"
+            >
+              🔔
+              {unreadNotifCount > 0 && (
+                <span className="notif-badge-count">{unreadNotifCount}</span>
+              )}
+            </button>
+
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              className="header-round-btn theme-sun-btn"
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              title="Toggle Light/Dark Theme"
+            >
+              {theme === 'dark' ? '🌙' : '☀️'}
+            </button>
+
+            {/* Profile Avatar Chip */}
+            <button
+              type="button"
+              className="profile-chip"
+              onClick={() => setTab('profile')}
+              title={authAccount ? `Signed in as ${authAccount.email}` : 'Profile'}
+            >
+              <span className="profile-avatar">
+                {(authAccount?.name || activeProfile?.name || 'S').trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="profile-chip-name">
+                {authAccount?.name || activeProfile?.name || 'Profile'}
+              </span>
+            </button>
           </div>
+        </header>
+
+        {/* Main View Area */}
+        <div className="main-content has-bottom-nav">
+          {/* TAB 1: Home Dashboard */}
+          {tab === 'home' && (
+            <>
+              {/* Habit Streak & Overview Strip */}
+              <div className="insights-strip">
+                <span className="insight-item">🔥 {journalDays} {journalDays === 1 ? 'day' : 'days'} habit</span>
+                <span className="insight-sep">•</span>
+                <span className="insight-item">📅 {recentEntries.length} this week</span>
+                <span className="insight-sep">•</span>
+                <span className="insight-item">📝 {totalWords.toLocaleString()} words</span>
+              </div>
+
+              {/* Quick Feature Launch Bar */}
+              <div className="quick-feature-bar" style={{
+                display: 'flex',
+                gap: '8px',
+                overflowX: 'auto',
+                padding: '6px 2px 14px',
+                scrollbarWidth: 'none',
+              }}>
+                <button
+                  type="button"
+                  className="quick-chip-btn whatsapp-chip"
+                  onClick={() => setTab('whatsapp')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '24px',
+                    border: '1.5px solid #25d366',
+                    background: 'rgba(37, 211, 102, 0.12)',
+                    color: '#25d366',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 8px rgba(37, 211, 102, 0.15)',
+                  }}
+                >
+                  💬 WhatsApp Enhancer
+                </button>
+                <button
+                  type="button"
+                  className="quick-chip-btn telugu-chip"
+                  onClick={() => setTab('telugu_converter')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '24px',
+                    border: '1.5px solid #f59e0b',
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    color: '#f59e0b',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)',
+                  }}
+                >
+                  🔄 Telugu Words Converter
+                </button>
+                <button
+                  type="button"
+                  className="quick-chip-btn"
+                  onClick={() => setTab('voice')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: '24px',
+                    border: '1px solid var(--border-color, #e5e7eb)',
+                    background: 'var(--card-bg, #ffffff)',
+                    color: 'var(--text-primary, #111827)',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  🎙️ Voice Studio
+                </button>
+                <button
+                  type="button"
+                  className="quick-chip-btn"
+                  onClick={() => setTab('locked')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: '24px',
+                    border: '1px solid var(--border-color, #e5e7eb)',
+                    background: 'var(--card-bg, #ffffff)',
+                    color: 'var(--text-primary, #111827)',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  🔒 Locked Vault
+                </button>
+                <button
+                  type="button"
+                  className="quick-chip-btn"
+                  onClick={() => setTab('documents')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: '24px',
+                    border: '1px solid var(--border-color, #e5e7eb)',
+                    background: 'var(--card-bg, #ffffff)',
+                    color: 'var(--text-primary, #111827)',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  📁 Documents
+                </button>
+                <button
+                  type="button"
+                  className="quick-chip-btn"
+                  onClick={() => setTab('translate')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: '24px',
+                    border: '1px solid var(--border-color, #e5e7eb)',
+                    background: 'var(--card-bg, #ffffff)',
+                    color: 'var(--text-primary, #111827)',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  🌐 Translator
+                </button>
+              </div>
+
+              {/* Dashboard Hub Cards */}
+              <div className="dashboard-hub-grid">
+                <div
+                  className="dashboard-hub-card highlight-card"
+                  onClick={handleNewNoteClick}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="hub-card-icon">✍️</div>
+                  <h3 className="hub-card-title">New Note</h3>
+                  <p className="hub-card-desc">Pick a date & start writing with full-screen focus</p>
+                </div>
+
+                <div
+                  className="dashboard-hub-card"
+                  onClick={() => setTab('whatsapp')}
+                  role="button"
+                  tabIndex={0}
+                  style={{ borderLeft: '4px solid #25d366' }}
+                >
+                  <div className="hub-card-icon">💬</div>
+                  <h3 className="hub-card-title">WhatsApp Enhancer</h3>
+                  <p className="hub-card-desc">Strip dates/senders, auto-clean chats, and share formatted thoughts</p>
+                </div>
+
+                <div
+                  className="dashboard-hub-card"
+                  onClick={() => setTab('telugu_converter')}
+                  role="button"
+                  tabIndex={0}
+                  style={{ borderLeft: '4px solid #f59e0b' }}
+                >
+                  <div className="hub-card-icon">🔄</div>
+                  <h3 className="hub-card-title">Telugu Words Converter</h3>
+                  <p className="hub-card-desc">Speak or type Telugu to get instant Romanized English letters (Ela unnaru?)</p>
+                </div>
+
+                <div
+                  className="dashboard-hub-card"
+                  onClick={() => setTab('voice')}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="hub-card-icon">🎙️</div>
+                  <h3 className="hub-card-title">Voice Journal</h3>
+                  <p className="hub-card-desc">Telugu & English voice dictation with audio playback</p>
+                </div>
+
+                <div
+                  className="dashboard-hub-card"
+                  onClick={() => setTab('locked')}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="hub-card-icon">🔒</div>
+                  <h3 className="hub-card-title">Locked Diaries</h3>
+                  <p className="hub-card-desc">AES-256 encrypted private vault with email recovery</p>
+                </div>
+
+                <div
+                  className="dashboard-hub-card"
+                  onClick={() => setTab('documents')}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="hub-card-icon">📁</div>
+                  <h3 className="hub-card-title">Documents</h3>
+                  <p className="hub-card-desc">Store, organize & preview PDF, Word and text files</p>
+                </div>
+              </div>
+
+              {/* Quick Audio Recorder Component */}
+              <VoiceRecorder key={activeProfile?.id ?? 'no-profile'} onSave={handleSave} />
+
+              {/* Entries Timeline Header */}
+              <div className="home-section-header">
+                <span className="section-title">📝 Recent Journal Feed</span>
+                <div className="list-actions">
+                  <button
+                    className={`action-btn ${showFavOnly ? 'fav-active' : ''}`}
+                    onClick={() => setShowFavOnly(f => !f)}
+                  >
+                    {showFavOnly ? '❤️ Favorites' : '☺ All'}
+                  </button>
+                  <button className="action-btn" onClick={() => setSortNewest(s => !s)}>
+                    {sortNewest ? '↓ Newest' : '↑ Oldest'}
+                  </button>
+                  {entries.length > 0 && (
+                    <>
+                      <button className="action-btn accent" onClick={handleExport}>📥 Export</button>
+                      <button
+                        className="action-btn"
+                        onClick={() => handleExportDocx()}
+                        title="Save all entries as a Word / Google Doc file"
+                      >
+                        📄 Doc
+                      </button>
+                      <button className="action-btn" onClick={handleBackup} title="Full data backup">
+                        💾
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <DiaryList
+                entries={entries}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onDelete={handleDelete}
+                onUpdate={handleUpdate}
+                onShare={handleShare}
+                onFavorite={handleFavorite}
+                onExportDoc={handleExportDocx}
+              />
+            </>
+          )}
+
+          {/* TAB 2: Dedicated Voice Journal */}
+          {tab === 'voice' && (
+            <VoiceJournalScreen
+              onBack={() => setTab('home')}
+              showToast={toast.show}
+            />
+          )}
+
+          {/* TAB 3: Text Diary / Notebook */}
+          {tab === 'diary' && <TextDiaryScreen key={activeProfile?.id ?? 'no-profile'} />}
+
+          {/* TAB 4: Locked Vault */}
+          {tab === 'locked' && (
+            <LockedDiariesScreen
+              userEmail={authAccount?.email || activeProfile?.email}
+              onOpenEditor={(entry) => setActiveEditorEntry(entry)}
+              showToast={toast.show}
+            />
+          )}
+
+          {/* TAB 5: Documents Vault */}
+          {tab === 'documents' && <DocumentsScreen showToast={toast.show} />}
+
+          {/* TAB 6: Translator */}
+          {tab === 'translate' && <TranslatorScreen key={activeProfile?.id ?? 'no-profile'} />}
+
+          {/* TAB 7: WhatsApp Enhancer */}
+          {tab === 'whatsapp' && (
+            <WhatsAppEnhancerScreen
+              key={activeProfile?.id ?? 'no-profile'}
+              showToast={toast.show}
+              onNavigateToDiary={() => setTab('diary')}
+            />
+          )}
+
+          {/* TAB 8: Telugu Words (Speech to Romanized Text Converter) */}
+          {tab === 'telugu_converter' && (
+            <TeluguUniversalConverter
+              onBack={() => setTab('home')}
+              onSendToDiary={(teluguText, romanizedText) => {
+                handleSave(teluguText, romanizedText);
+              }}
+              showToast={toast.show}
+            />
+          )}
+
+          {/* TAB 9: Profile & Settings */}
+          {tab === 'profile' && (
+            <ProfileScreen
+              profile={activeProfile}
+              authAccount={authAccount}
+              theme={theme}
+              palette={palette}
+              onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              onPaletteChange={(p) => setPalette(p)}
+              onSignOut={handleSignOut}
+              onBack={() => setTab('home')}
+              showToast={toast.show}
+              onSwitchProfile={() => setShowProfiles(true)}
+              onOpenAuthModal={() => setShowAuthModal(true)}
+            />
+          )}
         </div>
 
-        {/* Desktop Navigation */}
-        <nav className="desktop-nav" aria-label="Main Navigation">
-          <button className={`desktop-nav-link ${tab === 'home' ? 'active' : ''}`} onClick={() => setTab('home')}>
-            <span className="nav-icon">🎙️</span> Voice Journal
-            {voiceCount > 0 && <span className="nav-badge">{voiceCount}</span>}
+        {/* Responsive Mobile / Tablet Bottom Dock */}
+        <nav className="bottom-nav">
+          <button
+            type="button"
+            className={`bottom-nav-item ${tab === 'home' ? 'active' : ''}`}
+            onClick={() => setTab('home')}
+          >
+            <div className="bottom-nav-icon-box">🏠</div>
+            <span className="bottom-nav-label">Home</span>
+            {tab === 'home' && <span className="bottom-nav-indicator-bar" />}
           </button>
-          <button className={`desktop-nav-link ${tab === 'translate' ? 'active' : ''}`} onClick={() => setTab('translate')}>
-            <span className="nav-icon">🌐</span> Translator
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${tab === 'whatsapp' ? 'active' : ''}`}
+            onClick={() => setTab('whatsapp')}
+          >
+            <div className="bottom-nav-icon-box">💬</div>
+            <span className="bottom-nav-label">WhatsApp</span>
+            {tab === 'whatsapp' && <span className="bottom-nav-indicator-bar" />}
           </button>
-          <button className={`desktop-nav-link ${tab === 'diary' ? 'active' : ''}`} onClick={() => setTab('diary')}>
-            <span className="nav-icon">✍️</span> Notebook
-            {diaryCount > 0 && <span className="nav-badge">{diaryCount}</span>}
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${tab === 'telugu_converter' ? 'active' : ''}`}
+            onClick={() => setTab('telugu_converter')}
+          >
+            <div className="bottom-nav-icon-box">🔄</div>
+            <span className="bottom-nav-label">Telugu</span>
+            {tab === 'telugu_converter' && <span className="bottom-nav-indicator-bar" />}
           </button>
-          <button className={`desktop-nav-link ${tab === 'whatsapp' ? 'active' : ''}`} onClick={() => setTab('whatsapp')}>
-            <span className="nav-icon">💬</span> WhatsApp Enhancer
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${tab === 'voice' ? 'active' : ''}`}
+            onClick={() => setTab('voice')}
+          >
+            <div className="bottom-nav-icon-box">🎙️</div>
+            <span className="bottom-nav-label">Voice</span>
+            {tab === 'voice' && <span className="bottom-nav-indicator-bar" />}
           </button>
-          <button className={`desktop-nav-link ${tab === 'privacy' ? 'active' : ''}`} onClick={() => setTab('privacy')}>
-            <span className="nav-icon">🛡️</span> Security
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${tab === 'diary' ? 'active' : ''}`}
+            onClick={() => setTab('diary')}
+          >
+            <div className="bottom-nav-icon-box diary-active-box">✍️</div>
+            <span className="bottom-nav-label">Diary</span>
+            {tab === 'diary' && <span className="bottom-nav-indicator-bar" />}
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${tab === 'locked' ? 'active' : ''}`}
+            onClick={() => setTab('locked')}
+          >
+            <div className="bottom-nav-icon-box">🔒</div>
+            <span className="bottom-nav-label">Vault</span>
+            {tab === 'locked' && <span className="bottom-nav-indicator-bar" />}
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${tab === 'documents' ? 'active' : ''}`}
+            onClick={() => setTab('documents')}
+          >
+            <div className="bottom-nav-icon-box">📁</div>
+            <span className="bottom-nav-label">Docs</span>
+            {tab === 'documents' && <span className="bottom-nav-indicator-bar" />}
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${tab === 'profile' ? 'active' : ''}`}
+            onClick={() => setTab('profile')}
+          >
+            <div className="bottom-nav-icon-box">👤</div>
+            <span className="bottom-nav-label">Profile</span>
+            {tab === 'profile' && <span className="bottom-nav-indicator-bar" />}
           </button>
         </nav>
 
-        <div className="header-actions">
-          <button className="profile-chip" onClick={() => setShowProfiles(true)}
-            title={googleUser ? `Signed in as ${googleUser.email}` : 'Profiles'}>
-            <span className="profile-avatar">
-              {(activeProfile?.name.trim().charAt(0) || 'S').toUpperCase()}
-              {activeProfile?.avatarUrl && (
-                <img src={activeProfile.avatarUrl} alt=""
-                  onError={e => { e.currentTarget.style.display = 'none' }} />
-              )}
-            </span>
-            <span className="profile-chip-name">{activeProfile?.name || 'Saikrishna Jan...'}</span>
-            <span className="profile-chip-chevron">⌵</span>
-            {googleUser && <span className="profile-chip-cloud" title="Cloud Sync Active">☁️</span>}
-          </button>
+        {/* Global Toast */}
+        <div className={`toast ${toast.visible ? 'visible' : ''}`}>{toast.msg}</div>
 
-          <button className="header-round-btn" onClick={() => toast.show('🔔 All clear — no new notifications')} title="Notifications">
-            🔔
-          </button>
+        {/* Onboarding */}
+        {showOnboarding && <Onboarding onDone={() => setShowOnboarding(false)} />}
 
-          <button className="header-round-btn theme-sun-btn" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Toggle Light/Dark Theme">
-            {theme === 'dark' ? '🌙' : '☀️'}
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="main-content has-bottom-nav">
-        {/* TAB 1: Home */}
-        {tab === 'home' && (
-          <>
-            {/* Weekly Insights & Streak Strip */}
-            <div className="insights-strip">
-              <span className="insight-item">🔥 {journalDays} {journalDays === 1 ? 'day' : 'days'} habit</span>
-              <span className="insight-sep">•</span>
-              <span className="insight-item">📅 {recentEntries.length} this week</span>
-              <span className="insight-sep">•</span>
-              <span className="insight-item">📝 {totalWords.toLocaleString()} words</span>
-              {topMood && (
-                <>
-                  <span className="insight-sep">•</span>
-                  <span className="insight-item">{topMood}</span>
-                </>
-              )}
-            </div>
-
-            {/* Quick Mode Switcher */}
-            <div className="quick-mode-bar" role="tablist" aria-label="Feature Quick Switch">
-              <button className="quick-mode-pill active" onClick={() => setTab('home')}>
-                🎙️ Voice Journal
-              </button>
-              <button className="quick-mode-pill" onClick={() => setTab('whatsapp')}>
-                💬 WhatsApp Enhancer
-              </button>
-              <button className="quick-mode-pill" onClick={() => setTab('diary')}>
-                ✍️ Notebook
-              </button>
-              <button className="quick-mode-pill" onClick={() => setTab('translate')}>
-                🌐 Translator
-              </button>
-            </div>
-
-            {/* keyed by profile so a switch remounts the recorder with fresh data */}
-            <VoiceRecorder key={activeProfile?.id ?? 'no-profile'} onSave={handleSave} />
-            <div className="home-section-header">
-              <span className="section-title">📝 Your Entries</span>
-              <div className="list-actions">
-                <button className={`action-btn ${showFavOnly ? 'fav-active' : ''}`} onClick={() => setShowFavOnly(f => !f)}>
-                  {showFavOnly ? '❤️ Favorites' : '☺ All'}
-                </button>
-                <button className="action-btn" onClick={() => setSortNewest(s => !s)}>
-                  {sortNewest ? '↓ Newest' : '↑ Oldest'}
-                </button>
-                {entries.length > 0 && (
-                  <>
-                    <button className="action-btn accent" onClick={handleExport}>📥 Export</button>
-                    <button className="action-btn" onClick={() => handleExportDocx()}
-                      title="Save all entries as a Google Doc / Word file">📄 Doc</button>
-                    <button className="action-btn" onClick={handleBackup} title="Full data backup">💾</button>
-                  </>
-                )}
-              </div>
-            </div>
-            <DiaryList
-              entries={entries} searchQuery={searchQuery}
-              onSearchChange={setSearchQuery} onDelete={handleDelete}
-              onUpdate={handleUpdate} onShare={handleShare}
-              onFavorite={handleFavorite}
-              onExportDoc={handleExportDocx}
-            />
-          </>
-        )}
-
-        {tab === 'translate' && <TranslatorScreen key={activeProfile?.id ?? 'no-profile'} />}
-        {tab === 'diary' && <TextDiaryScreen key={activeProfile?.id ?? 'no-profile'} />}
-        {tab === 'whatsapp' && (
-          <WhatsAppEnhancerScreen
-            key={activeProfile?.id ?? 'no-profile'}
-            showToast={toast.show}
-            onNavigateToDiary={() => setTab('diary')}
+        {/* Auth Modal (Login / Sign Up / Google) */}
+        {showAuthModal && (
+          <AuthModal
+            onSuccess={handleAuthSuccess}
+            onContinueAsGuest={handleContinueAsGuest}
           />
         )}
-        {tab === 'privacy' && <PrivacyScreen onBack={() => setTab('home')} showToast={toast.show} />}
+
+        {/* Reset Account Password Modal (from email reset link or recovery event) */}
+        {showResetPasswordModal && (
+          <ResetPasswordModal
+            email={authAccount?.email || ''}
+            onClose={() => setShowResetPasswordModal(false)}
+            onSuccess={() => {
+              setShowResetPasswordModal(false);
+              toast.show('🎉 Password updated successfully! You can sign in anytime.');
+            }}
+            showToast={toast.show}
+          />
+        )}
+
+        {/* Date Picker Modal for New Note */}
+        <DatePickerModal
+          isOpen={showDatePicker}
+          onClose={() => setShowDatePicker(false)}
+          onProceed={handleProceedNewNote}
+        />
+
+        {/* Event Notification Drawer */}
+        <NotificationPanel
+          isOpen={showNotificationPanel}
+          onClose={() => setShowNotificationPanel(false)}
+          showToast={toast.show}
+        />
+
+        {/* Legacy Profile Switcher Modal if opened */}
+        {showProfiles && (
+          <ProfileSwitcher
+            profiles={profiles}
+            activeId={activeProfile?.id ?? null}
+            googleEmail={authAccount?.email || null}
+            onGoogleSignIn={handleGoogleSignIn}
+            onSignOut={handleSignOut}
+            onChanged={handleProfileChanged}
+            onClose={() => setShowProfiles(false)}
+          />
+        )}
       </div>
-
-      {/* Bottom Navigation Bar */}
-      <nav className="bottom-nav">
-        <button className={`bottom-nav-item ${tab === 'home' ? 'active' : ''}`} onClick={() => setTab('home')}>
-          <div className="bottom-nav-icon-box">
-            <svg className="bottom-nav-icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-          </div>
-          <span className="bottom-nav-label">Home</span>
-          {tab === 'home' && <span className="bottom-nav-indicator-bar" />}
-        </button>
-
-        <button className={`bottom-nav-item ${tab === 'translate' ? 'active' : ''}`} onClick={() => setTab('translate')}>
-          <div className="bottom-nav-icon-box">
-            <svg className="bottom-nav-icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-          </div>
-          <span className="bottom-nav-label">Translate</span>
-          {tab === 'translate' && <span className="bottom-nav-indicator-bar" />}
-        </button>
-
-        <button className={`bottom-nav-item ${tab === 'diary' ? 'active' : ''}`} onClick={() => setTab('diary')}>
-          <div className="bottom-nav-icon-box diary-active-box">
-            <svg className="bottom-nav-icon-svg" width="24" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-              <line x1="8" y1="6" x2="16" y2="6" strokeWidth="1.8" />
-              <line x1="8" y1="10" x2="14" y2="10" strokeWidth="1.8" />
-            </svg>
-          </div>
-          <span className="bottom-nav-label">Diary</span>
-          {tab === 'diary' && <span className="bottom-nav-indicator-bar" />}
-        </button>
-
-        <button className={`bottom-nav-item ${tab === 'whatsapp' ? 'active' : ''}`} onClick={() => setTab('whatsapp')}>
-          <div className="bottom-nav-icon-box whatsapp-nav-box">
-            <svg className="bottom-nav-icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-            </svg>
-          </div>
-          <span className="bottom-nav-label">WhatsApp</span>
-          {tab === 'whatsapp' && <span className="bottom-nav-indicator-bar" />}
-        </button>
-
-        <button className={`bottom-nav-item ${tab === 'privacy' ? 'active' : ''}`} onClick={() => setTab('privacy')}>
-          <div className="bottom-nav-icon-box">
-            <svg className="bottom-nav-icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-          </div>
-          <span className="bottom-nav-label">Security</span>
-          {tab === 'privacy' && <span className="bottom-nav-indicator-bar" />}
-        </button>
-      </nav>
-
-      {/* Toast */}
-      <div className={`toast ${toast.visible ? 'visible' : ''}`}>{toast.msg}</div>
-
-      {/* Onboarding */}
-      {showOnboarding && <Onboarding onDone={() => setShowOnboarding(false)} />}
-
-      {/* Local sign-up: create a profile on this device */}
-      {!showOnboarding && profiles.length === 0 && !skipProfileGate && (
-        <ProfileGate
-          onCreated={() => handleProfileChanged()}
-          onSkip={() => setSkipProfileGate(true)}
-          onGoogleSignIn={handleGoogleSignIn}
-        />
-      )}
-
-      {/* Profile switcher */}
-      {showProfiles && (
-        <ProfileSwitcher
-          profiles={profiles}
-          activeId={activeProfile?.id ?? null}
-          googleEmail={googleUser ? (googleUser.email || googleUser.name) : null}
-          onGoogleSignIn={handleGoogleSignIn}
-          onSignOut={() => { void handleSignOut() }}
-          onChanged={handleProfileChanged}
-          onClose={() => setShowProfiles(false)}
-        />
-      )}
-    </div>
     </AppLock>
-  )
+  );
 }
-
