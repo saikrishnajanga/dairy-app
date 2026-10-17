@@ -8,6 +8,8 @@ import {
   formatFileSize,
   getDocumentUrl,
   getDocumentTextContent,
+  extractDocxText,
+  getDocumentBlob,
   updateDocumentTextContent,
   createTextDocument,
   DOCUMENT_CATEGORIES,
@@ -183,7 +185,17 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
       if (isReadableDoc) {
         setIsTextLoading(true);
         try {
-          const text = await getDocumentTextContent(doc);
+          let text = await getDocumentTextContent(doc);
+          if (
+            text.startsWith('PK\x03\x04') ||
+            text.startsWith('PK ') ||
+            text.includes('word/numbering.xml') ||
+            text.includes('word/document.xml')
+          ) {
+            const blob = await getDocumentBlob(doc);
+            const extracted = await extractDocxText(blob);
+            text = extracted || '(Word Document: Tap "Edit like Google Doc" to view and edit formatted text)';
+          }
           setPreviewText(text);
           setEditedText(text);
         } catch {
@@ -243,6 +255,16 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
         doc.mimeType?.includes('word')
       ) {
         text = await getDocumentTextContent(doc);
+        if (
+          text.startsWith('PK\x03\x04') ||
+          text.startsWith('PK ') ||
+          text.includes('word/numbering.xml') ||
+          text.includes('word/document.xml')
+        ) {
+          const blob = await getDocumentBlob(doc);
+          const extracted = await extractDocxText(blob);
+          text = extracted || '';
+        }
       } else {
         text = previewText || '';
       }
@@ -548,32 +570,53 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
           >
             {/* Modal Header */}
             <div className="doc-preview-header">
-              <div className="doc-preview-title-wrap">
-                <span className="doc-preview-icon">
-                  {getDocTypeInfo(previewDoc.name, previewDoc.mimeType).icon}
-                </span>
-                <div className="doc-preview-meta">
-                  <h3 id="doc-preview-title" className="doc-preview-title" title={previewDoc.name}>
-                    {previewDoc.name}
-                  </h3>
-                  <div className="doc-preview-sub">
-                    <span className="doc-badge-chip">{previewDoc.category}</span>
-                    <span>•</span>
-                    <span>{formatFileSize(previewDoc.fileSize)}</span>
-                    <span>•</span>
-                    <span>
-                      Updated{' '}
-                      {new Date(previewDoc.updatedAt || previewDoc.createdAt).toLocaleDateString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
+              {/* Top Row: Back button, Title & Icon, Close button */}
+              <div className="doc-preview-top-row">
+                <button
+                  type="button"
+                  className="doc-preview-back-btn"
+                  onClick={handleClosePreview}
+                  title="Back to documents"
+                >
+                  ← Back
+                </button>
+
+                <div className="doc-preview-title-wrap">
+                  <span className="doc-preview-icon">
+                    {getDocTypeInfo(previewDoc.name, previewDoc.mimeType).icon}
+                  </span>
+                  <div className="doc-preview-meta">
+                    <h3 id="doc-preview-title" className="doc-preview-title" title={previewDoc.name}>
+                      {previewDoc.name}
+                    </h3>
+                    <div className="doc-preview-sub">
+                      <span className="doc-badge-chip">{previewDoc.category}</span>
+                      <span>•</span>
+                      <span>{formatFileSize(previewDoc.fileSize)}</span>
+                    </div>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  className="doc-header-btn close-doc-btn"
+                  onClick={handleClosePreview}
+                  title="Close preview"
+                  style={{
+                    flexShrink: 0,
+                    minWidth: '34px',
+                    height: '34px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '50%',
+                  }}
+                >
+                  ✕
+                </button>
               </div>
 
+              {/* Action Toolbar Row */}
               <div className="doc-preview-top-actions">
                 {/* Google Doc Editor Launch Button */}
                 {(getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'text' ||
@@ -588,6 +631,7 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                       color: 'var(--text-inverse)',
                       fontWeight: 700,
                       border: 'none',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     📝 Edit like Google Doc
@@ -597,7 +641,7 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                 {/* Text View / Edit mode toggle */}
                 {(getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'text' ||
                   (getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'word' && previewText)) && (
-                  <div className="doc-mode-toggle">
+                  <div className="doc-mode-toggle" style={{ flexShrink: 0 }}>
                     <button
                       type="button"
                       className={`doc-mode-btn ${!isEditingText ? 'active' : ''}`}
@@ -626,16 +670,9 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                   className="doc-header-btn"
                   onClick={() => handleDownload(previewDoc)}
                   title="Download file"
+                  style={{ whiteSpace: 'nowrap' }}
                 >
                   ⬇️ Download
-                </button>
-                <button
-                  type="button"
-                  className="doc-header-btn close-doc-btn"
-                  onClick={handleClosePreview}
-                  title="Close preview"
-                >
-                  ✕
                 </button>
               </div>
             </div>
@@ -736,6 +773,24 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                             </button>
                           </div>
                         </div>
+                        {typeInfo.type === 'word' && (
+                          <div style={{
+                            padding: '8px 12px',
+                            background: 'rgba(59, 130, 246, 0.08)',
+                            border: '1px solid rgba(59, 130, 246, 0.25)',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            color: 'var(--text)',
+                            margin: '8px 14px 0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            flexWrap: 'wrap',
+                          }}>
+                            <span>📘 <strong>Word Document:</strong> Extracted plain text. For rich formatting (bold, headings, bullet points), tap <strong>"Open in Google Doc Editor"</strong>!</span>
+                          </div>
+                        )}
                         <textarea
                           className="doc-editor-textarea"
                           value={editedText}
