@@ -15,15 +15,16 @@ import {
   type DocumentItem,
   type DocumentCategory,
 } from '../services/documents';
-import { createTextEntry } from '../services/textDiary';
+import { createTextEntry, type TextDiaryEntry } from '../services/textDiary';
 import ConfirmDialog from './ConfirmDialog';
 import { hapticTap } from '../services/utils';
 
 interface Props {
   showToast: (msg: string) => void;
+  onOpenEditor?: (entry: TextDiaryEntry) => void;
 }
 
-export default function DocumentsScreen({ showToast }: Props) {
+export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
   const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -91,7 +92,7 @@ export default function DocumentsScreen({ showToast }: Props) {
       );
       showToast(`Uploaded "${file.name}"`);
       await loadDocs();
-      // Automatically open the uploaded document for immediate preview!
+      // Automatically open the uploaded document for immediate preview / edit!
       handleOpenPreview(newDoc);
     } catch (err: unknown) {
       showToast('Upload failed: ' + (err instanceof Error ? err.message : 'Error'));
@@ -105,7 +106,7 @@ export default function DocumentsScreen({ showToast }: Props) {
   const handleDownload = async (doc: DocumentItem) => {
     hapticTap();
     try {
-      showToast(`Downloading "${doc.name}"…`);
+      showToast(`Preparing "${doc.name}"…`);
       await downloadDocument(doc);
     } catch (e: any) {
       showToast('Download failed: ' + (e?.message || e));
@@ -168,15 +169,18 @@ export default function DocumentsScreen({ showToast }: Props) {
       setPreviewUrl(url);
 
       const ext = doc.name.split('.').pop()?.toLowerCase() || '';
-      const isTextFile =
+      const isReadableDoc =
         ext === 'txt' ||
         ext === 'md' ||
         ext === 'json' ||
         ext === 'csv' ||
         ext === 'log' ||
-        doc.mimeType?.startsWith('text/');
+        ext === 'docx' ||
+        ext === 'doc' ||
+        doc.mimeType?.startsWith('text/') ||
+        doc.mimeType?.includes('word');
 
-      if (isTextFile) {
+      if (isReadableDoc) {
         setIsTextLoading(true);
         try {
           const text = await getDocumentTextContent(doc);
@@ -220,6 +224,46 @@ export default function DocumentsScreen({ showToast }: Props) {
       showToast('Could not save changes: ' + (e?.message || e));
     } finally {
       setIsSavingDoc(false);
+    }
+  };
+
+  // Open any uploaded document directly in Google Docs-style Rich Text Editor
+  const handleOpenGoogleDocEditor = async (doc: DocumentItem) => {
+    hapticTap();
+    try {
+      showToast('Opening in Google Doc Editor…');
+      let text = '';
+      const ext = doc.name.split('.').pop()?.toLowerCase() || '';
+      if (
+        ext === 'txt' ||
+        ext === 'md' ||
+        ext === 'docx' ||
+        ext === 'doc' ||
+        doc.mimeType?.includes('text') ||
+        doc.mimeType?.includes('word')
+      ) {
+        text = await getDocumentTextContent(doc);
+      } else {
+        text = previewText || '';
+      }
+
+      const cleanTitle = doc.name.replace(/\.[^/.]+$/, '');
+      const paragraphs = text
+        ? text
+            .split(/\n\n+/)
+            .map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`)
+            .join('')
+        : `<p>Start writing and editing "${doc.name}" here…</p>`;
+
+      const entry = createTextEntry(cleanTitle, paragraphs);
+      if (onOpenEditor) {
+        handleClosePreview();
+        onOpenEditor(entry);
+      } else {
+        showToast('Document opened in Diary Notebook!');
+      }
+    } catch (e: any) {
+      showToast('Could not open editor: ' + (e?.message || e));
     }
   };
 
@@ -282,7 +326,8 @@ export default function DocumentsScreen({ showToast }: Props) {
   const getDocTypeInfo = (name: string, mime: string) => {
     const ext = name.split('.').pop()?.toLowerCase() || '';
     if (ext === 'pdf' || mime?.includes('pdf')) return { icon: '📕', type: 'pdf', label: 'PDF Document' };
-    if (ext === 'doc' || ext === 'docx' || mime?.includes('word')) return { icon: '📘', type: 'word', label: 'Word Document' };
+    if (ext === 'doc' || ext === 'docx' || mime?.includes('word'))
+      return { icon: '📘', type: 'word', label: 'Word Document' };
     if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'webp' || mime?.includes('image'))
       return { icon: '🖼️', type: 'image', label: 'Image' };
     if (ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv' || mime?.includes('text'))
@@ -403,7 +448,7 @@ export default function DocumentsScreen({ showToast }: Props) {
         <div className="documents-grid">
           {filteredDocs.map((doc) => {
             const info = getDocTypeInfo(doc.name, doc.mimeType);
-            const isText = info.type === 'text';
+            const isEditable = info.type === 'text' || info.type === 'word';
 
             return (
               <div
@@ -442,13 +487,23 @@ export default function DocumentsScreen({ showToast }: Props) {
                 </div>
 
                 <div className="doc-actions-row" onClick={(e) => e.stopPropagation()}>
+                  {isEditable && (
+                    <button
+                      type="button"
+                      className="doc-action-btn primary-action"
+                      onClick={() => handleOpenGoogleDocEditor(doc)}
+                      title="Open and edit like Google Docs"
+                    >
+                      📝 Edit Doc
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="doc-action-btn primary-action"
+                    className="doc-action-btn"
                     onClick={() => handleOpenPreview(doc)}
-                    title={isText ? 'Open & Edit document' : 'Open / Preview document'}
+                    title="Open / Preview document"
                   >
-                    {isText ? '✏️ Open & Edit' : '👁️ Preview'}
+                    👁️ View
                   </button>
                   <button
                     type="button"
@@ -520,8 +575,28 @@ export default function DocumentsScreen({ showToast }: Props) {
               </div>
 
               <div className="doc-preview-top-actions">
+                {/* Google Doc Editor Launch Button */}
+                {(getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'text' ||
+                  getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'word') && (
+                  <button
+                    type="button"
+                    className="doc-header-btn primary-doc-btn"
+                    onClick={() => handleOpenGoogleDocEditor(previewDoc)}
+                    title="Open in full Google Docs-style rich text editor with full toolbar"
+                    style={{
+                      background: 'var(--primary-gradient)',
+                      color: 'var(--text-inverse)',
+                      fontWeight: 700,
+                      border: 'none',
+                    }}
+                  >
+                    📝 Edit like Google Doc
+                  </button>
+                )}
+
                 {/* Text View / Edit mode toggle */}
-                {getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'text' && (
+                {(getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'text' ||
+                  (getDocTypeInfo(previewDoc.name, previewDoc.mimeType).type === 'word' && previewText)) && (
                   <div className="doc-mode-toggle">
                     <button
                       type="button"
@@ -616,8 +691,8 @@ export default function DocumentsScreen({ showToast }: Props) {
                   );
                 }
 
-                // 3. TEXT & MARKDOWN PREVIEW / EDITOR
-                if (typeInfo.type === 'text') {
+                // 3. TEXT & WORD DOCUMENT PREVIEW / INLINE EDITOR
+                if (typeInfo.type === 'text' || (typeInfo.type === 'word' && (previewText || isTextLoading))) {
                   if (isTextLoading) {
                     return (
                       <div className="doc-loading-view">
@@ -632,15 +707,24 @@ export default function DocumentsScreen({ showToast }: Props) {
                       <div className="doc-editor-view">
                         <div className="doc-editor-toolbar">
                           <span className="doc-stats">
-                            {editedText.length} chars • {editedText.trim() ? editedText.trim().split(/\s+/).length : 0} words
+                            {editedText.length} chars •{' '}
+                            {editedText.trim() ? editedText.trim().split(/\s+/).length : 0} words
                           </span>
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             <button
                               type="button"
                               className="action-btn"
                               onClick={handleCopyDocText}
                             >
                               📋 Copy
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              onClick={() => handleOpenGoogleDocEditor(previewDoc)}
+                              style={{ background: 'var(--primary-soft)', color: 'var(--primary-text)' }}
+                            >
+                              🚀 Open in Google Doc Editor
                             </button>
                             <button
                               type="button"
@@ -656,21 +740,22 @@ export default function DocumentsScreen({ showToast }: Props) {
                           className="doc-editor-textarea"
                           value={editedText}
                           onChange={(e) => setEditedText(e.target.value)}
-                          placeholder="Type or paste your document text here…"
+                          placeholder="Type or edit your document text here…"
                           autoFocus
                         />
                       </div>
                     );
                   }
 
-                  // Read-only text viewer
+                  // Read-only text / Word viewer
                   return (
                     <div className="doc-text-view">
                       <div className="doc-editor-toolbar">
                         <span className="doc-stats">
-                          {previewText.length} chars • {previewText.trim() ? previewText.trim().split(/\s+/).length : 0} words
+                          {previewText.length} chars •{' '}
+                          {previewText.trim() ? previewText.trim().split(/\s+/).length : 0} words
                         </span>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                           <button
                             type="button"
                             className="action-btn"
@@ -680,10 +765,17 @@ export default function DocumentsScreen({ showToast }: Props) {
                           </button>
                           <button
                             type="button"
-                            className="action-btn primary"
+                            className="action-btn"
                             onClick={() => setIsEditingText(true)}
                           >
-                            ✏️ Edit Document
+                            ✏️ Edit Here
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn primary"
+                            onClick={() => handleOpenGoogleDocEditor(previewDoc)}
+                          >
+                            🚀 Open in Google Doc Editor
                           </button>
                           <button
                             type="button"
@@ -700,7 +792,7 @@ export default function DocumentsScreen({ showToast }: Props) {
                   );
                 }
 
-                // 4. WORD / DOCX / OTHER FILE TYPES
+                // 4. OTHER GENERIC FILE TYPES
                 return (
                   <div className="doc-generic-view">
                     <div className="doc-generic-card">
@@ -719,6 +811,13 @@ export default function DocumentsScreen({ showToast }: Props) {
                           onClick={() => handleDownload(previewDoc)}
                         >
                           ⬇️ Download & Open
+                        </button>
+                        <button
+                          type="button"
+                          className="action-btn"
+                          onClick={() => handleOpenGoogleDocEditor(previewDoc)}
+                        >
+                          📝 Open in Google Doc Editor
                         </button>
                         <button
                           type="button"
@@ -743,7 +842,7 @@ export default function DocumentsScreen({ showToast }: Props) {
           <div className="pin-modal new-doc-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="confirm-title">📄 Create New Text Note</h3>
             <p className="documents-subtitle" style={{ margin: '6px 0 16px' }}>
-              Create an editable text note directly in your vault.
+              Create an editable document directly in your vault.
             </p>
             <form onSubmit={handleCreateNewDoc}>
               <div style={{ marginBottom: 14 }}>

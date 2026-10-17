@@ -38,7 +38,7 @@ import { initAuth, signInWithGoogle, signOut, onPasswordRecoveryTriggered, type 
 import { pullFromCloud, pushAllToCloud } from './services/cloudSync';
 import { isSupabaseConfigured } from './services/supabase';
 import { exportVoiceEntriesDocx } from './services/docExport';
-import { getNotifications } from './services/notifications';
+import { getNotifications, subscribeNotificationCount } from './services/notifications';
 import { hapticTap } from './services/utils';
 import type { AuthChangeEvent } from '@supabase/supabase-js';
 
@@ -110,18 +110,12 @@ export default function App() {
     localStorage.setItem('vd_palette', palette);
   }, [palette]);
 
-  // Load unread notification count
-  const refreshNotifications = useCallback(async () => {
-    try {
-      const list = await getNotifications();
-      const unread = list.filter(n => !n.read).length;
-      setUnreadNotifCount(unread);
-    } catch {}
-  }, []);
-
+  // Real-time unread notification count subscription
   useEffect(() => {
-    void refreshNotifications();
-  }, [refreshNotifications, showNotificationPanel]);
+    return subscribeNotificationCount((count) => {
+      setUnreadNotifCount(count);
+    });
+  }, []);
 
   const loadEntries = useCallback(() => {
     let data = searchQuery ? searchEntries(searchQuery) : getEntries();
@@ -841,7 +835,12 @@ export default function App() {
           )}
 
           {/* TAB 5: Documents Vault */}
-          {tab === 'documents' && <DocumentsScreen showToast={toast.show} />}
+          {tab === 'documents' && (
+            <DocumentsScreen
+              showToast={toast.show}
+              onOpenEditor={(entry) => setActiveEditorEntry(entry)}
+            />
+          )}
 
           {/* TAB 6: Translator */}
           {tab === 'translate' && <TranslatorScreen key={activeProfile?.id ?? 'no-profile'} />}

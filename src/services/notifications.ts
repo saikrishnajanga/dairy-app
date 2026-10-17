@@ -13,6 +13,7 @@ import {
   dbGetNotifications,
   dbSaveNotification,
   dbMarkNotificationRead,
+  dbMarkAllNotificationsRead,
   dbClearAllNotifications,
   type AppNotification,
 } from './db';
@@ -33,6 +34,41 @@ export type NotificationEvent =
   | 'SYNC_FAILED'
   | 'VOICE_RECORDING_SAVED'
   | 'REMINDER';
+
+// ─── Real-Time Notification Subscribers ────────────────────
+type NotifCountListener = (unreadCount: number) => void;
+const listeners = new Set<NotifCountListener>();
+
+export function subscribeNotificationCount(fn: NotifCountListener): () => void {
+  listeners.add(fn);
+  // Send current count immediately
+  void getUnreadNotificationCount().then((count) => {
+    try { fn(count); } catch {}
+  });
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+async function broadcastUnreadCount(): Promise<void> {
+  const count = await getUnreadNotificationCount();
+  for (const fn of listeners) {
+    try {
+      fn(count);
+    } catch (e) {
+      console.warn('Notification subscriber error:', e);
+    }
+  }
+}
+
+export async function getUnreadNotificationCount(): Promise<number> {
+  try {
+    const list = await dbGetNotifications();
+    return list.filter((n) => !n.read).length;
+  } catch {
+    return 0;
+  }
+}
 
 export async function addNotification(opts: {
   title: string;
@@ -57,6 +93,8 @@ export async function addNotification(opts: {
   } catch (e) {
     console.warn('Could not save notification to IndexedDB:', e);
   }
+
+  void broadcastUnreadCount();
   return notif;
 }
 
@@ -71,14 +109,25 @@ export async function getNotifications(): Promise<AppNotification[]> {
 export async function markNotificationAsRead(id: string): Promise<void> {
   try {
     await dbMarkNotificationRead(id);
+    void broadcastUnreadCount();
   } catch (e) {
     console.warn('Failed to mark notification read:', e);
+  }
+}
+
+export async function markAllNotificationsAsRead(): Promise<void> {
+  try {
+    await dbMarkAllNotificationsRead();
+    void broadcastUnreadCount();
+  } catch (e) {
+    console.warn('Failed to mark all notifications read:', e);
   }
 }
 
 export async function clearAllNotifications(): Promise<void> {
   try {
     await dbClearAllNotifications();
+    void broadcastUnreadCount();
   } catch (e) {
     console.warn('Failed to clear notifications:', e);
   }

@@ -18,6 +18,7 @@ import {
 } from './db';
 import { genId } from './utils';
 import { addNotification } from './notifications';
+import { saveOrShareFile } from './docExport';
 
 export const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB limit
 export const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg'];
@@ -254,19 +255,20 @@ export async function getDocumentUrl(doc: DocumentItem): Promise<string> {
 }
 
 /**
- * Download a document to the user's device.
+ * Download or share a document to the user's device (works on native Android APK and Web).
  */
 export async function downloadDocument(doc: DocumentItem): Promise<void> {
-  const url = await getDocumentUrl(doc);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = doc.name;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  if (url.startsWith('blob:')) {
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  }
+  const blob = await getDocumentBlob(doc);
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  await saveOrShareFile({
+    filename: doc.name,
+    bytes,
+    mime: doc.mimeType || 'application/octet-stream',
+    title: doc.name,
+    dialogTitle: 'Download or Save Document',
+  });
 }
 
 /**
@@ -289,10 +291,101 @@ export async function getDocumentBlob(doc: DocumentItem): Promise<Blob> {
 }
 
 /**
- * Read the text content of a text-based document (.txt, .md, text/*).
+ * Extract plain text / paragraphs from a Word .docx file blob.
+ */
+export async function extractDocxText(blob: Blob): Promise<string> {
+  try {
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let offset = 0;
+    const view = new DataView(buffer);
+
+    while (offset + 30 <= bytes.length) {
+      if (view.getUint32(offset, true) !== 0x04034b50) {
+        offset++;
+        continue;
+      }
+      const compression = view.getUint16(offset + 8, true);
+      const compressedSize = view.getUint32(offset + 18, true);
+      const nameLen = view.getUint16(offset + 26, true);
+      const extraLen = view.getUint16(offset + 28, true);
+
+      const nameBytes = bytes.subarray(offset + 30, offset + 30 + nameLen);
+      const name = new TextDecoder().decode(nameBytes);
+      const dataStart = offset + 30 + nameLen + extraLen;
+
+      if (name === 'word/document.xml') {
+        const dataBytes = bytes.subarray(dataStart, dataStart + compressedSize);
+        let xmlText = '';
+        if (compression === 0) {
+          xmlText = new TextDecoder().decode(dataBytes);
+        } else if (compression === 8 && typeof DecompressionStream !== 'undefined') {
+          try {
+            const ds = new DecompressionStream('deflate-raw');
+            const writer = ds.writable.getWriter();
+            writer.write(dataBytes);
+            writer.close();
+            const reader = ds.readable.getReader();
+            const chunks: Uint8Array[] = [];
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) chunks.push(value);
+            }
+            const total = chunks.reduce((acc, c) => acc + c.length, 0);
+            const out = new Uint8Array(total);
+            let pos = 0;
+            for (const c of chunks) {
+              out.set(c, pos);
+              pos += c.length;
+            }
+            xmlText = new TextDecoder().decode(out);
+          } catch {}
+        }
+
+        if (xmlText) {
+          try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xmlText, 'application/xml');
+            const pNodes = doc.getElementsByTagName('w:p');
+            const lines: string[] = [];
+            for (let i = 0; i < pNodes.length; i++) {
+              const tNodes = pNodes[i].getElementsByTagName('w:t');
+              let pText = '';
+              for (let j = 0; j < tNodes.length; j++) {
+                pText += tNodes[j].textContent || '';
+              }
+              if (pText.trim()) lines.push(pText.trim());
+            }
+            if (lines.length > 0) return lines.join('\n\n');
+          } catch {}
+        }
+      }
+      offset = dataStart + compressedSize;
+    }
+
+    // Fallback: search for <w:t> tags in text representation
+    const rawDecoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    const matches = rawDecoded.match(/<w:t[^>]*>([^<]+)<\/w:t>/g);
+    if (matches && matches.length > 0) {
+      return matches.map((m) => m.replace(/<[^>]+>/g, '')).join(' ');
+    }
+  } catch (err) {
+    console.warn('Docx text extraction notice:', err);
+  }
+  return '';
+}
+
+/**
+ * Read the text content of a text-based document (.txt, .md, text/*) or Word (.docx).
  */
 export async function getDocumentTextContent(doc: DocumentItem): Promise<string> {
   const blob = await getDocumentBlob(doc);
+  const ext = doc.name.split('.').pop()?.toLowerCase() || '';
+  if (ext === 'docx' || ext === 'doc') {
+    const extracted = await extractDocxText(blob);
+    if (extracted) return extracted;
+  }
   return await blob.text();
 }
 

@@ -249,9 +249,29 @@ export async function dbMarkNotificationRead(id: string): Promise<void> {
         req.result.read = true;
         store.put(req.result);
       }
-      resolve();
     };
-    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function dbMarkAllNotificationsRead(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('notifications', 'readwrite');
+    const store = tx.objectStore('notifications');
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const list = req.result as AppNotification[];
+      for (const item of list) {
+        if (!item.read) {
+          item.read = true;
+          store.put(item);
+        }
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 

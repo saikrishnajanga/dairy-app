@@ -7,7 +7,7 @@ import {
 } from '../services/textDiary';
 import { dbSaveDraft, dbGetDraft, dbDeleteDraft } from '../services/db';
 import { subscribeSyncState, type SyncState } from '../services/cloudSync';
-import { exportTextEntryDocx } from '../services/docExport';
+import { exportTextEntryDocx, saveOrShareFile } from '../services/docExport';
 import ConfirmDialog from './ConfirmDialog';
 import { hapticTap } from '../services/utils';
 
@@ -296,26 +296,91 @@ export default function FullScreenEditor({
     }
   };
 
-  // Export PDF
+  // Cross-platform PDF Export (works seamlessly on Android APK and Web)
   const handleExportPdf = async () => {
     hapticTap();
     if (!editorRef.current) return;
     try {
+      showToast('Generating PDF…');
       const { jsPDF } = await import('jspdf');
-      const doc = new jsPDF();
-      doc.setFontSize(20);
-      doc.text(title || 'Untitled Entry', 20, 24);
-      doc.setFontSize(10);
-      doc.setTextColor(120);
-      doc.text(`Entry Date: ${entryDate} | Created: ${new Date(entry.createdAt || entry.timestamp).toLocaleString()}`, 20, 32);
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 18;
+      const contentWidth = pageWidth - margin * 2;
+
+      // Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(33, 24, 18);
+      const titleLines = doc.splitTextToSize(title || 'Untitled Entry', contentWidth);
+      doc.text(titleLines, margin, 24);
+      let cursorY = 24 + titleLines.length * 8;
+
+      // Metadata Bar
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(120, 100, 90);
+      const metaText = `Date: ${entryDate}  |  Created: ${new Date(entry.createdAt || entry.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}  |  Words: ${wordCount}`;
+      doc.text(metaText, margin, cursorY);
+      cursorY += 6;
+
+      // Divider line
+      doc.setDrawColor(210, 185, 165);
+      doc.setLineWidth(0.35);
+      doc.line(margin, cursorY, pageWidth - margin, cursorY);
+      cursorY += 8;
+
+      // Body text with multi-page pagination
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(11);
-      doc.setTextColor(30);
-      const text = editorRef.current.innerText || '';
-      const lines = doc.splitTextToSize(text, 170);
-      doc.text(lines, 20, 44);
-      doc.save(`${(title || 'entry').replace(/[^\w-]/g, '_')}.pdf`);
-      showToast('📄 PDF exported!');
+      doc.setTextColor(40, 30, 25);
+      const rawText = editorRef.current.innerText || '';
+      const paragraphs = rawText.split(/\n/);
+
+      for (const p of paragraphs) {
+        if (!p.trim()) {
+          cursorY += 4.5;
+          continue;
+        }
+        const lines = doc.splitTextToSize(p, contentWidth);
+        for (const line of lines) {
+          if (cursorY > pageHeight - 20) {
+            doc.addPage();
+            cursorY = 20;
+          }
+          doc.text(line, margin, cursorY);
+          cursorY += 6.5;
+        }
+        cursorY += 3;
+      }
+
+      // Convert to Uint8Array for cross-platform delivery
+      const arrayBuffer = doc.output('arraybuffer');
+      const bytes = new Uint8Array(arrayBuffer);
+      const safeName = (title || 'diary_note').replace(/[^\w-]/g, '_').slice(0, 50);
+      const filename = `${safeName || 'diary_note'}.pdf`;
+
+      const res = await saveOrShareFile({
+        filename,
+        bytes,
+        mime: 'application/pdf',
+        title: title || 'Diary Entry PDF',
+        dialogTitle: 'Save or Share PDF Note',
+      });
+
+      if (res === 'shared') {
+        showToast('📄 PDF ready in share & save dialog!');
+      } else {
+        showToast('📄 PDF downloaded successfully!');
+      }
     } catch (e: any) {
+      console.error('PDF export error:', e);
       showToast('PDF export failed: ' + (e?.message || e));
     }
   };

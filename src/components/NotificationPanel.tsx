@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getNotifications,
   markNotificationAsRead,
+  markAllNotificationsAsRead,
   clearAllNotifications,
   isReminderEnabled,
   setReminderEnabled,
@@ -39,6 +40,13 @@ export default function NotificationPanel({ isOpen, onClose, showToast }: Props)
     hapticTap();
     await markNotificationAsRead(id);
     await loadNotifs();
+  };
+
+  const handleMarkAllRead = async () => {
+    hapticTap();
+    await markAllNotificationsAsRead();
+    await loadNotifs();
+    showToast('✓ All notifications marked as read');
   };
 
   const handleClearAll = async () => {
@@ -150,9 +158,19 @@ export default function NotificationPanel({ isOpen, onClose, showToast }: Props)
         </div>
 
         {notifications.length > 0 && (
-          <div className="notif-footer">
-            <button type="button" className="action-btn text-btn" onClick={handleClearAll}>
-              Clear All Notifications
+          <div className="notif-footer" style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '10px 16px' }}>
+            {notifications.some(n => !n.read) && (
+              <button
+                type="button"
+                className="action-btn text-btn"
+                onClick={handleMarkAllRead}
+                style={{ color: 'var(--primary-text)' }}
+              >
+                ✓ Mark all as read
+              </button>
+            )}
+            <button type="button" className="action-btn text-btn" onClick={handleClearAll} style={{ color: 'var(--danger)' }}>
+              🗑️ Clear all
             </button>
           </div>
         )}
