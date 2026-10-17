@@ -270,6 +270,99 @@ export async function downloadDocument(doc: DocumentItem): Promise<void> {
 }
 
 /**
+ * Retrieve the raw Blob for a document (from IndexedDB or by downloading from cloud).
+ */
+export async function getDocumentBlob(doc: DocumentItem): Promise<Blob> {
+  const local = await dbGetDocumentById(doc.id);
+  if (local?.blob) return local.blob;
+
+  const url = await getDocumentUrl(doc);
+  const resp = await fetch(url);
+  const blob = await resp.blob();
+
+  // Cache in IndexedDB for subsequent offline instant preview
+  if (local) {
+    local.blob = blob;
+    await dbSaveDocument(local);
+  }
+  return blob;
+}
+
+/**
+ * Read the text content of a text-based document (.txt, .md, text/*).
+ */
+export async function getDocumentTextContent(doc: DocumentItem): Promise<string> {
+  const blob = await getDocumentBlob(doc);
+  return await blob.text();
+}
+
+/**
+ * Update the text content of an existing document and persist to IndexedDB & Supabase.
+ */
+export async function updateDocumentTextContent(
+  docId: string,
+  newText: string,
+  newCategory?: string
+): Promise<void> {
+  const local = await dbGetDocumentById(docId);
+  if (!local) throw new Error('Document not found in vault.');
+
+  const blob = new Blob([newText], { type: local.mimeType || 'text/plain' });
+  const now = Date.now();
+  local.blob = blob;
+  local.fileSize = blob.size;
+  local.updatedAt = now;
+  if (newCategory) local.category = newCategory;
+
+  await dbSaveDocument(local);
+
+  // Sync updated file to Supabase Storage if authenticated
+  if (local.storagePath && isSupabaseConfigured() && getCurrentUserId()) {
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        await supabase.storage
+          .from('documents')
+          .upload(local.storagePath, blob, {
+            upsert: true,
+            contentType: local.mimeType || 'text/plain',
+          });
+
+        await supabase
+          .from('documents')
+          .update({
+            file_size: blob.size,
+            category: local.category,
+            updated_at: new Date(now).toISOString(),
+          })
+          .eq('id', docId);
+      } catch (e) {
+        console.warn('Could not sync updated document to cloud:', e);
+      }
+    }
+  }
+
+  void addNotification({
+    title: '📝 Document Saved',
+    message: `"${local.name}" was edited and saved (${formatFileSize(blob.size)}).`,
+    type: 'success',
+  });
+}
+
+/**
+ * Create a brand new text document directly in the document vault.
+ */
+export async function createTextDocument(
+  name: string,
+  content: string,
+  category: string = 'Personal'
+): Promise<DocumentItem> {
+  const safeName = name.trim().endsWith('.txt') ? name.trim() : `${name.trim() || 'Untitled Document'}.txt`;
+  const file = new File([content], safeName, { type: 'text/plain' });
+  return await uploadDocument(file, category);
+}
+
+/**
  * Rename a document.
  */
 export async function renameDocument(id: string, newName: string): Promise<void> {

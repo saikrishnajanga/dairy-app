@@ -66,6 +66,7 @@ export default function App() {
 
   // Navigation & Active Screen
   const [tab, setTab] = useState<Tab>('home');
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortNewest, setSortNewest] = useState(true);
@@ -388,54 +389,86 @@ export default function App() {
             </div>
           </div>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation (Laptop / Desktop) */}
           <nav className="desktop-nav" aria-label="Main Navigation">
             <button
+              type="button"
               className={`desktop-nav-link ${tab === 'home' ? 'active' : ''}`}
-              onClick={() => setTab('home')}
+              onClick={() => {
+                hapticTap();
+                setTab('home');
+              }}
             >
               <span className="nav-icon">🏠</span> Dashboard
             </button>
             <button
-              className={`desktop-nav-link ${tab === 'whatsapp' ? 'active' : ''}`}
-              onClick={() => setTab('whatsapp')}
-            >
-              <span className="nav-icon">💬</span> WhatsApp
-            </button>
-            <button
-              className={`desktop-nav-link ${tab === 'telugu_converter' ? 'active' : ''}`}
-              onClick={() => setTab('telugu_converter')}
-            >
-              <span className="nav-icon">🔄</span> Telugu Words
-            </button>
-            <button
-              className={`desktop-nav-link ${tab === 'voice' ? 'active' : ''}`}
-              onClick={() => setTab('voice')}
-            >
-              <span className="nav-icon">🎙️</span> Voice Journal
-            </button>
-            <button
+              type="button"
               className={`desktop-nav-link ${tab === 'diary' ? 'active' : ''}`}
-              onClick={() => setTab('diary')}
+              onClick={() => {
+                hapticTap();
+                setTab('diary');
+              }}
             >
               <span className="nav-icon">✍️</span> Notebook
               {diaryCount > 0 && <span className="nav-badge">{diaryCount}</span>}
             </button>
             <button
+              type="button"
+              className={`desktop-nav-link ${tab === 'voice' ? 'active' : ''}`}
+              onClick={() => {
+                hapticTap();
+                setTab('voice');
+              }}
+            >
+              <span className="nav-icon">🎙️</span> Voice Journal
+            </button>
+            <button
+              type="button"
               className={`desktop-nav-link ${tab === 'locked' ? 'active' : ''}`}
-              onClick={() => setTab('locked')}
+              onClick={() => {
+                hapticTap();
+                setTab('locked');
+              }}
             >
               <span className="nav-icon">🔒</span> Locked Vault
             </button>
             <button
+              type="button"
               className={`desktop-nav-link ${tab === 'documents' ? 'active' : ''}`}
-              onClick={() => setTab('documents')}
+              onClick={() => {
+                hapticTap();
+                setTab('documents');
+              }}
             >
               <span className="nav-icon">📁</span> Documents
             </button>
             <button
+              type="button"
+              className={`desktop-nav-link ${tab === 'whatsapp' ? 'active' : ''}`}
+              onClick={() => {
+                hapticTap();
+                setTab('whatsapp');
+              }}
+            >
+              <span className="nav-icon">💬</span> WhatsApp
+            </button>
+            <button
+              type="button"
+              className={`desktop-nav-link ${tab === 'telugu_converter' ? 'active' : ''}`}
+              onClick={() => {
+                hapticTap();
+                setTab('telugu_converter');
+              }}
+            >
+              <span className="nav-icon">🔄</span> Telugu Words
+            </button>
+            <button
+              type="button"
               className={`desktop-nav-link ${tab === 'translate' ? 'active' : ''}`}
-              onClick={() => setTab('translate')}
+              onClick={() => {
+                hapticTap();
+                setTab('translate');
+              }}
             >
               <span className="nav-icon">🌐</span> Translator
             </button>
@@ -851,12 +884,15 @@ export default function App() {
           )}
         </div>
 
-        {/* Responsive Mobile / Tablet Bottom Dock */}
+        {/* Streamlined Mobile Bottom Navigation (5 Clean Spacious Items) */}
         <nav className="bottom-nav">
           <button
             type="button"
             className={`bottom-nav-item ${tab === 'home' ? 'active' : ''}`}
-            onClick={() => setTab('home')}
+            onClick={() => {
+              hapticTap();
+              setTab('home');
+            }}
           >
             <div className="bottom-nav-icon-box">🏠</div>
             <span className="bottom-nav-label">Home</span>
@@ -865,38 +901,11 @@ export default function App() {
 
           <button
             type="button"
-            className={`bottom-nav-item ${tab === 'whatsapp' ? 'active' : ''}`}
-            onClick={() => setTab('whatsapp')}
-          >
-            <div className="bottom-nav-icon-box">💬</div>
-            <span className="bottom-nav-label">WhatsApp</span>
-            {tab === 'whatsapp' && <span className="bottom-nav-indicator-bar" />}
-          </button>
-
-          <button
-            type="button"
-            className={`bottom-nav-item ${tab === 'telugu_converter' ? 'active' : ''}`}
-            onClick={() => setTab('telugu_converter')}
-          >
-            <div className="bottom-nav-icon-box">🔄</div>
-            <span className="bottom-nav-label">Telugu</span>
-            {tab === 'telugu_converter' && <span className="bottom-nav-indicator-bar" />}
-          </button>
-
-          <button
-            type="button"
-            className={`bottom-nav-item ${tab === 'voice' ? 'active' : ''}`}
-            onClick={() => setTab('voice')}
-          >
-            <div className="bottom-nav-icon-box">🎙️</div>
-            <span className="bottom-nav-label">Voice</span>
-            {tab === 'voice' && <span className="bottom-nav-indicator-bar" />}
-          </button>
-
-          <button
-            type="button"
             className={`bottom-nav-item ${tab === 'diary' ? 'active' : ''}`}
-            onClick={() => setTab('diary')}
+            onClick={() => {
+              hapticTap();
+              setTab('diary');
+            }}
           >
             <div className="bottom-nav-icon-box diary-active-box">✍️</div>
             <span className="bottom-nav-label">Diary</span>
@@ -905,8 +914,24 @@ export default function App() {
 
           <button
             type="button"
+            className={`bottom-nav-item ${tab === 'voice' ? 'active' : ''}`}
+            onClick={() => {
+              hapticTap();
+              setTab('voice');
+            }}
+          >
+            <div className="bottom-nav-icon-box">🎙️</div>
+            <span className="bottom-nav-label">Voice</span>
+            {tab === 'voice' && <span className="bottom-nav-indicator-bar" />}
+          </button>
+
+          <button
+            type="button"
             className={`bottom-nav-item ${tab === 'locked' ? 'active' : ''}`}
-            onClick={() => setTab('locked')}
+            onClick={() => {
+              hapticTap();
+              setTab('locked');
+            }}
           >
             <div className="bottom-nav-icon-box">🔒</div>
             <span className="bottom-nav-label">Vault</span>
@@ -915,24 +940,138 @@ export default function App() {
 
           <button
             type="button"
-            className={`bottom-nav-item ${tab === 'documents' ? 'active' : ''}`}
-            onClick={() => setTab('documents')}
+            className={`bottom-nav-item ${['whatsapp', 'telugu_converter', 'documents', 'translate', 'profile'].includes(tab) ? 'active' : ''}`}
+            onClick={() => {
+              hapticTap();
+              setShowMoreMenu(prev => !prev);
+            }}
+            title="More Tools"
           >
-            <div className="bottom-nav-icon-box">📁</div>
-            <span className="bottom-nav-label">Docs</span>
-            {tab === 'documents' && <span className="bottom-nav-indicator-bar" />}
-          </button>
-
-          <button
-            type="button"
-            className={`bottom-nav-item ${tab === 'profile' ? 'active' : ''}`}
-            onClick={() => setTab('profile')}
-          >
-            <div className="bottom-nav-icon-box">👤</div>
-            <span className="bottom-nav-label">Profile</span>
-            {tab === 'profile' && <span className="bottom-nav-indicator-bar" />}
+            <div className="bottom-nav-icon-box">
+              {tab === 'whatsapp' ? '💬' : tab === 'telugu_converter' ? '🔄' : tab === 'documents' ? '📁' : tab === 'profile' ? '👤' : tab === 'translate' ? '🌐' : '☰'}
+            </div>
+            <span className="bottom-nav-label">
+              {tab === 'whatsapp' ? 'WhatsApp' : tab === 'telugu_converter' ? 'Telugu' : tab === 'documents' ? 'Docs' : tab === 'profile' ? 'Profile' : tab === 'translate' ? 'Translate' : 'More'}
+            </span>
+            {['whatsapp', 'telugu_converter', 'documents', 'translate', 'profile'].includes(tab) && (
+              <span className="bottom-nav-indicator-bar" />
+            )}
           </button>
         </nav>
+
+        {/* Mobile "More Tools" Bottom Drawer */}
+        {showMoreMenu && (
+          <div className="more-menu-overlay" onClick={() => setShowMoreMenu(false)}>
+            <div className="more-menu-sheet" onClick={(e) => e.stopPropagation()}>
+              <div className="more-menu-handle-bar" />
+              <div className="more-menu-header">
+                <div>
+                  <h3 className="more-menu-title">⚡ More Features & Tools</h3>
+                  <p className="more-menu-subtitle">Fast access to companion services & settings</p>
+                </div>
+                <button
+                  type="button"
+                  className="more-menu-close-btn"
+                  onClick={() => setShowMoreMenu(false)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="more-menu-grid">
+                <button
+                  type="button"
+                  className={`more-menu-card ${tab === 'whatsapp' ? 'active' : ''}`}
+                  onClick={() => {
+                    hapticTap();
+                    setTab('whatsapp');
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <div className="more-card-icon" style={{ background: 'rgba(37, 211, 102, 0.15)', color: '#25d366' }}>
+                    💬
+                  </div>
+                  <div className="more-card-text">
+                    <div className="more-card-title">WhatsApp Enhancer</div>
+                    <div className="more-card-desc">Strip dates/senders & reformat voice chats</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`more-menu-card ${tab === 'telugu_converter' ? 'active' : ''}`}
+                  onClick={() => {
+                    hapticTap();
+                    setTab('telugu_converter');
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <div className="more-card-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                    🔄
+                  </div>
+                  <div className="more-card-text">
+                    <div className="more-card-title">Telugu Words Converter</div>
+                    <div className="more-card-desc">Speech & text to Romanized English script</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`more-menu-card ${tab === 'documents' ? 'active' : ''}`}
+                  onClick={() => {
+                    hapticTap();
+                    setTab('documents');
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <div className="more-card-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
+                    📁
+                  </div>
+                  <div className="more-card-text">
+                    <div className="more-card-title">Document Vault</div>
+                    <div className="more-card-desc">Store, preview & edit PDFs, Word, text files</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`more-menu-card ${tab === 'translate' ? 'active' : ''}`}
+                  onClick={() => {
+                    hapticTap();
+                    setTab('translate');
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <div className="more-card-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
+                    🌐
+                  </div>
+                  <div className="more-card-text">
+                    <div className="more-card-title">Translator</div>
+                    <div className="more-card-desc">Instant English ↔ Telugu phrase translation</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`more-menu-card ${tab === 'profile' ? 'active' : ''}`}
+                  onClick={() => {
+                    hapticTap();
+                    setTab('profile');
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <div className="more-card-icon" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#ec4899' }}>
+                    👤
+                  </div>
+                  <div className="more-card-text">
+                    <div className="more-card-title">Profile & Settings</div>
+                    <div className="more-card-desc">Themes, cloud sync, security & backup</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Global Toast */}
         <div className={`toast ${toast.visible ? 'visible' : ''}`}>{toast.msg}</div>
