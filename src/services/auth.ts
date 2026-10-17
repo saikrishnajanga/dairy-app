@@ -147,6 +147,31 @@ export async function updateAccountPassword(newPassword: string): Promise<void> 
   });
 }
 
+export async function updateAccountProfile(updates: {
+  name?: string;
+  avatarUrl?: string;
+}): Promise<AuthAccount | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  const dataToUpdate: Record<string, string> = {};
+  if (updates.name) {
+    dataToUpdate.full_name = updates.name.trim();
+    dataToUpdate.name = updates.name.trim();
+  }
+  if (updates.avatarUrl !== undefined) {
+    dataToUpdate.avatar_url = updates.avatarUrl;
+    dataToUpdate.picture = updates.avatarUrl;
+  }
+
+  const { data, error } = await supabase.auth.updateUser({
+    data: dataToUpdate,
+  });
+
+  if (error) throw error;
+  return data.user ? toAccount(data.user) : null;
+}
+
 // ─── Google OAuth ──────────────────────────────────────────
 
 export async function signInWithGoogle(): Promise<void> {

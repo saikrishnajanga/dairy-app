@@ -1,12 +1,30 @@
 import { useState } from 'react';
 import type { Profile } from '../services/profiles';
+import {
+  updateProfile,
+  changeProfilePassword,
+  removeProfilePin,
+  verifyProfilePin,
+  createProfile,
+  getActiveProfile,
+} from '../services/profiles';
 import type { AuthAccount } from '../services/auth';
-import { updateAccountPassword } from '../services/auth';
+import {
+  updateAccountPassword,
+  updateAccountProfile,
+  sendPasswordResetEmail,
+} from '../services/auth';
 import { PALETTES, type PaletteId } from '../App';
 import { exportAllData } from '../services/storage';
+import { saveOrShareFile } from '../services/docExport';
 import ConfirmDialog from './ConfirmDialog';
 import PrivacyScreen from './PrivacyScreen';
 import { hapticTap } from '../services/utils';
+
+const AVATAR_OPTIONS = [
+  '👑', '⚡', '🦁', '🌸', '🚀', '🎨', '🕶️', '💎',
+  '🌟', '☕', '✨', '🐱', '🎧', '💼', '🧘', '🦄',
+];
 
 interface Props {
   profile: Profile | null;
@@ -20,6 +38,7 @@ interface Props {
   showToast: (msg: string) => void;
   onSwitchProfile?: () => void;
   onOpenAuthModal?: () => void;
+  onProfileUpdate?: (updatedProfile?: Profile | null, updatedAccount?: AuthAccount | null) => void;
 }
 
 export default function ProfileScreen({
@@ -34,62 +53,234 @@ export default function ProfileScreen({
   showToast,
   onSwitchProfile,
   onOpenAuthModal,
+  onProfileUpdate,
 }: Props) {
-  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  // Navigation / sub-screen states
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
+  const [showConfirmSignOut, setShowConfirmSignOut] = useState(false);
+
+  // Profile Edit State
+  const initialName = authAccount?.name || profile?.name || 'Saikrishna';
+  const initialEmail = authAccount?.email || profile?.email || '';
+  const initialAvatar = authAccount?.avatarUrl || profile?.avatarUrl || '';
+
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState(initialName);
+  const [editEmail, setEditEmail] = useState(initialEmail);
+  const [editAvatar, setEditAvatar] = useState(initialAvatar);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  // Password / Security State
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [showConfirmSignOut, setShowConfirmSignOut] = useState(false);
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passBusy, setPassBusy] = useState(false);
+  const [passError, setPassError] = useState('');
+  const [passSuccess, setPassSuccess] = useState('');
+  const [resetEmailSending, setResetEmailSending] = useState(false);
 
   const displayName = authAccount?.name || profile?.name || 'Saikrishna';
   const displayEmail = authAccount?.email || profile?.email || 'saikrishna@example.com';
   const provider = authAccount?.provider || profile?.provider || 'local';
   const isVerified = authAccount?.isEmailConfirmed ?? true;
+  const hasLocalPin = Boolean(profile?.pinHash);
 
-  const handleBackupExport = () => {
+  // Compute password strength
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { label: '', level: '' };
+    if (pass.length < 6) return { label: 'Weak (min 6 chars)', level: 'weak' };
+    const hasNum = /\d/.test(pass);
+    const hasLetter = /[a-zA-Z]/.test(pass);
+    const hasSpecial = /[^a-zA-Z0-9]/.test(pass);
+    if (pass.length >= 8 && hasNum && hasLetter && hasSpecial) {
+      return { label: 'Strong & Secure', level: 'strong' };
+    }
+    if (pass.length >= 6 && hasNum && hasLetter) {
+      return { label: 'Good', level: 'fair' };
+    }
+    return { label: 'Fair', level: 'fair' };
+  };
+
+  const passwordStrength = getPasswordStrength(newPassword);
+
+  // Save profile changes (Name, Email, Avatar)
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim()) {
+      showToast('⚠️ Name cannot be empty');
+      return;
+    }
+
+    setProfileSaving(true);
     hapticTap();
     try {
-      const json = exportAllData();
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `voicediary_backup_${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('💾 Complete backup downloaded!');
-    } catch {
-      showToast('Backup export failed');
+      let updatedProf = profile;
+      let updatedAcc = authAccount;
+
+      // 1. Update local profile
+      if (profile) {
+        updateProfile(profile.id, {
+          name: editName.trim(),
+          email: editEmail.trim() || undefined,
+          avatarUrl: editAvatar || undefined,
+        });
+        updatedProf = {
+          ...profile,
+          name: editName.trim(),
+          email: editEmail.trim() || undefined,
+          avatarUrl: editAvatar || undefined,
+        };
+      } else {
+        const created = await createProfile(editName.trim());
+        updateProfile(created.id, {
+          email: editEmail.trim() || undefined,
+          avatarUrl: editAvatar || undefined,
+        });
+        updatedProf = {
+          ...created,
+          email: editEmail.trim() || undefined,
+          avatarUrl: editAvatar || undefined,
+        };
+      }
+
+      // 2. If signed in with cloud account, update user metadata
+      if (authAccount) {
+        try {
+          const cloudUpdated = await updateAccountProfile({
+            name: editName.trim(),
+            avatarUrl: editAvatar || undefined,
+          });
+          if (cloudUpdated) {
+            updatedAcc = cloudUpdated;
+          }
+        } catch (cloudErr) {
+          console.warn('Cloud profile update skipped:', cloudErr);
+        }
+      }
+
+      onProfileUpdate?.(updatedProf, updatedAcc);
+      setIsEditingProfile(false);
+      showToast('👤 Profile updated successfully!');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
     }
   };
 
+  // Password / Security form submit
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setPassError('');
+    setPassSuccess('');
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters.');
+    const minLen = provider === 'email' ? 6 : 4;
+    if (newPassword.length < minLen) {
+      setPassError(`Password must be at least ${minLen} characters.`);
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.');
+      setPassError('Passwords do not match.');
       return;
     }
 
-    setBusy(true);
+    setPassBusy(true);
     hapticTap();
+
     try {
-      await updateAccountPassword(newPassword);
-      showToast('🛡️ Account password updated successfully');
-      setShowPasswordChange(false);
+      if (provider === 'email') {
+        // Cloud account password update via Supabase
+        await updateAccountPassword(newPassword);
+        setPassSuccess('🛡️ Account password updated successfully!');
+        showToast('🛡️ Account password updated successfully!');
+      } else {
+        // Local profile password / PIN update
+        let targetId = profile?.id;
+        if (!targetId) {
+          const fresh = await createProfile(displayName);
+          targetId = fresh.id;
+        }
+
+        await changeProfilePassword(targetId, newPassword, currentPassword || undefined);
+        const refreshed = getActiveProfile();
+        onProfileUpdate?.(refreshed, authAccount);
+
+        setPassSuccess('🔒 Profile password/PIN updated successfully!');
+        showToast('🔒 Profile password/PIN updated successfully!');
+      }
+
       setNewPassword('');
       setConfirmPassword('');
+      setCurrentPassword('');
+      setTimeout(() => setPassSuccess(''), 4500);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not update password');
+      setPassError(err instanceof Error ? err.message : 'Could not update password');
     } finally {
-      setBusy(false);
+      setPassBusy(false);
+    }
+  };
+
+  // Remove local profile PIN protection
+  const handleRemoveLocalPin = async () => {
+    if (!profile) return;
+    setPassError('');
+    setPassSuccess('');
+
+    if (hasLocalPin && currentPassword) {
+      const ok = await verifyProfilePin(profile.id, currentPassword);
+      if (!ok) {
+        setPassError('Current PIN is incorrect.');
+        return;
+      }
+    }
+
+    hapticTap();
+    removeProfilePin(profile.id);
+    const refreshed = getActiveProfile();
+    onProfileUpdate?.(refreshed, authAccount);
+    setCurrentPassword('');
+    setPassSuccess('🔓 Password/PIN protection removed.');
+    showToast('🔓 Password protection removed');
+  };
+
+  // Send password reset email
+  const handleSendResetEmail = async () => {
+    if (!displayEmail) return;
+    setResetEmailSending(true);
+    setPassError('');
+    hapticTap();
+    try {
+      await sendPasswordResetEmail(displayEmail);
+      setPassSuccess(`📧 Password reset instructions sent to ${displayEmail}`);
+      showToast(`📧 Reset link sent to ${displayEmail}`);
+    } catch (err: unknown) {
+      setPassError(err instanceof Error ? err.message : 'Failed to send reset email');
+    } finally {
+      setResetEmailSending(false);
+    }
+  };
+
+  // Export full JSON backup (works seamlessly on mobile & web)
+  const handleBackupExport = async () => {
+    hapticTap();
+    try {
+      const json = exportAllData();
+      const bytes = new TextEncoder().encode(json);
+      const filename = `voicediary_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      await saveOrShareFile({
+        filename,
+        bytes,
+        mime: 'application/json',
+        title: 'VoiceDiary Pro Backup',
+        dialogTitle: 'Save VoiceDiary Backup',
+      });
+      showToast('💾 Backup exported successfully!');
+    } catch {
+      showToast('Backup export failed');
     }
   };
 
@@ -113,14 +304,35 @@ export default function ProfileScreen({
       </div>
 
       <div className="profile-content-container">
-        {/* User Card */}
-        <div className="profile-user-card">
+        {/* User Profile Card */}
+        <div className="profile-user-card" style={{ position: 'relative' }}>
           <div className="profile-avatar-large">
-            {displayName.charAt(0).toUpperCase()}
+            {editAvatar ? (
+              <span>{editAvatar}</span>
+            ) : (
+              <span>{displayName.trim().charAt(0).toUpperCase()}</span>
+            )}
           </div>
-          <div className="profile-user-details">
-            <h3 className="profile-display-name">{displayName}</h3>
-            <p className="profile-email-text">{displayEmail}</p>
+
+          <div className="profile-user-details" style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <h3 className="profile-display-name">{displayName}</h3>
+              <button
+                type="button"
+                className="profile-edit-trigger-btn"
+                onClick={() => {
+                  hapticTap();
+                  setIsEditingProfile(!isEditingProfile);
+                  setEditName(displayName);
+                  setEditEmail(displayEmail);
+                  setEditAvatar(authAccount?.avatarUrl || profile?.avatarUrl || '');
+                }}
+              >
+                {isEditingProfile ? '✕ Cancel' : '✏️ Edit Profile'}
+              </button>
+            </div>
+
+            <p className="profile-email-text">{displayEmail || 'No email associated'}</p>
 
             <div className="profile-badges-row">
               <span className={`provider-badge ${provider}`}>
@@ -134,9 +346,105 @@ export default function ProfileScreen({
                   {isVerified ? '✓ Verified' : '⏳ Pending Verification'}
                 </span>
               )}
+
+              {hasLocalPin && (
+                <span className="security-mode-badge local">
+                  🔒 PIN Protected
+                </span>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Inline Profile Editor */}
+        {isEditingProfile && (
+          <form onSubmit={handleSaveProfile} className="profile-edit-card">
+            <h4 className="profile-card-title" style={{ margin: 0 }}>
+              ✏️ Edit Profile Details
+            </h4>
+            <p className="profile-card-desc" style={{ margin: 0 }}>
+              Update your display name, email, and choose a personal avatar icon.
+            </p>
+
+            {/* Avatar Picker */}
+            <div className="avatar-selector-wrap">
+              <span className="profile-input-label">Choose Avatar Icon</span>
+              <div className="avatar-options-grid">
+                {AVATAR_OPTIONS.map(em => (
+                  <button
+                    key={em}
+                    type="button"
+                    className={`avatar-option-btn ${editAvatar === em ? 'selected' : ''}`}
+                    onClick={() => {
+                      hapticTap();
+                      setEditAvatar(em);
+                    }}
+                  >
+                    {em}
+                  </button>
+                ))}
+                {editAvatar && (
+                  <button
+                    type="button"
+                    className="avatar-option-btn"
+                    title="Use Initial Letter"
+                    onClick={() => {
+                      hapticTap();
+                      setEditAvatar('');
+                    }}
+                    style={{ fontSize: '13px', fontWeight: 800 }}
+                  >
+                    ABC
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Display Name Input */}
+            <div className="profile-input-group">
+              <label className="profile-input-label">Display Name</label>
+              <input
+                type="text"
+                className="profile-text-input"
+                placeholder="Your Name (e.g. Saikrishna)"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                required
+              />
+            </div>
+
+            {/* Email Input */}
+            <div className="profile-input-group">
+              <label className="profile-input-label">Email Address</label>
+              <input
+                type="email"
+                className="profile-text-input"
+                placeholder="name@example.com"
+                value={editEmail}
+                onChange={e => setEditEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="profile-form-actions">
+              <button
+                type="submit"
+                className="action-btn primary"
+                disabled={profileSaving}
+                style={{ padding: '9px 20px', borderRadius: '20px', fontWeight: 700 }}
+              >
+                {profileSaving ? 'Saving…' : '✓ Save Profile Changes'}
+              </button>
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => setIsEditingProfile(false)}
+                style={{ padding: '9px 16px', borderRadius: '20px' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Cloud Sign In Banner when unauthenticated */}
         {!authAccount && onOpenAuthModal && (
@@ -177,7 +485,228 @@ export default function ProfileScreen({
           </div>
         )}
 
-        {/* Theme and Palette Customization */}
+        {/* Account Security & Password Section */}
+        <div className="profile-section-card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <h4 className="profile-card-title">🔑 Change Password & Security</h4>
+              <p className="profile-card-desc">
+                {provider === 'email'
+                  ? 'Manage your cloud account login credentials.'
+                  : 'Set or update your personal diary password / lock PIN.'}
+              </p>
+            </div>
+            <span className={`security-mode-badge ${provider === 'email' ? 'cloud' : 'local'}`}>
+              {provider === 'email' ? '☁️ Cloud Account' : hasLocalPin ? '🔒 PIN Active' : '🔓 Unlocked'}
+            </span>
+          </div>
+
+          <div className="security-actions-list">
+            {/* Change Password Dropdown Button */}
+            <button
+              type="button"
+              className="action-btn-row"
+              onClick={() => {
+                hapticTap();
+                setShowPasswordChange(!showPasswordChange);
+                setPassError('');
+                setPassSuccess('');
+              }}
+              style={{
+                borderColor: showPasswordChange ? 'var(--primary)' : undefined,
+                background: showPasswordChange ? 'var(--surface-hover)' : undefined,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '17px' }}>🔑</span>
+                <span style={{ fontWeight: 700 }}>
+                  {provider === 'email'
+                    ? 'Change Account Password'
+                    : hasLocalPin
+                    ? 'Change Profile Password / PIN'
+                    : 'Set Profile Password / PIN'}
+                </span>
+              </div>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                {showPasswordChange ? '▲ Close' : '▼ Expand'}
+              </span>
+            </button>
+
+            {/* Expandable Password Form */}
+            {showPasswordChange && (
+              <form onSubmit={handlePasswordChange} className="password-change-form">
+                {passError && (
+                  <div className="auth-alert error" style={{ padding: '10px 12px', fontSize: '13px' }}>
+                    <span>⚠️ {passError}</span>
+                  </div>
+                )}
+                {passSuccess && (
+                  <div className="auth-alert success" style={{ padding: '10px 12px', fontSize: '13px', background: 'var(--success-soft)', color: 'var(--success)', border: '1px solid var(--success)' }}>
+                    <span>{passSuccess}</span>
+                  </div>
+                )}
+
+                {/* Current PIN/Password if local profile has PIN */}
+                {hasLocalPin && provider !== 'email' && (
+                  <div className="profile-input-group">
+                    <label className="profile-input-label">Current PIN / Password</label>
+                    <div className="password-input-row">
+                      <input
+                        type={showCurrentPass ? 'text' : 'password'}
+                        className="profile-text-input"
+                        placeholder="Enter current PIN"
+                        value={currentPassword}
+                        onChange={e => setCurrentPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="password-eye-btn"
+                        onClick={() => setShowCurrentPass(!showCurrentPass)}
+                        title={showCurrentPass ? 'Hide password' : 'Show password'}
+                      >
+                        {showCurrentPass ? '🙈' : '👁️'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* New Password Input */}
+                <div className="profile-input-group">
+                  <label className="profile-input-label">
+                    {provider === 'email' ? 'New Password (min 6 chars)' : 'New PIN / Password (min 4 chars)'}
+                  </label>
+                  <div className="password-input-row">
+                    <input
+                      type={showNewPass ? 'text' : 'password'}
+                      className="profile-text-input"
+                      placeholder={provider === 'email' ? 'Enter at least 6 characters' : 'Enter 4+ digits or characters'}
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-eye-btn"
+                      onClick={() => setShowNewPass(!showNewPass)}
+                      title={showNewPass ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPass ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+
+                  {newPassword && (
+                    <div className="password-strength-indicator">
+                      <div className="password-strength-bar">
+                        <div className={`password-strength-fill ${passwordStrength.level}`} />
+                      </div>
+                      <span>{passwordStrength.label}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Confirm New Password Input */}
+                <div className="profile-input-group">
+                  <label className="profile-input-label">Confirm New Password</label>
+                  <div className="password-input-row">
+                    <input
+                      type={showConfirmPass ? 'text' : 'password'}
+                      className="profile-text-input"
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-eye-btn"
+                      onClick={() => setShowConfirmPass(!showConfirmPass)}
+                      title={showConfirmPass ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPass ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="profile-form-actions">
+                  <button
+                    type="submit"
+                    className="action-btn primary"
+                    disabled={passBusy}
+                    style={{ padding: '9px 20px', borderRadius: '20px', fontWeight: 700 }}
+                  >
+                    {passBusy ? 'Updating…' : '✓ Update Password'}
+                  </button>
+
+                  {/* Remove PIN button for local profiles */}
+                  {hasLocalPin && provider !== 'email' && (
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={handleRemoveLocalPin}
+                      style={{ padding: '9px 16px', borderRadius: '20px', color: 'var(--danger)' }}
+                    >
+                      🔓 Remove Password Lock
+                    </button>
+                  )}
+
+                  {/* Forgot Password Reset Email for Cloud accounts */}
+                  {provider === 'email' && (
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={handleSendResetEmail}
+                      disabled={resetEmailSending}
+                      style={{ padding: '9px 16px', borderRadius: '20px' }}
+                    >
+                      {resetEmailSending ? 'Sending Link…' : '📧 Email Me Reset Link'}
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
+
+            {/* App Lock & Master PIN */}
+            <button
+              type="button"
+              className="action-btn-row"
+              onClick={() => {
+                hapticTap();
+                setShowPrivacySettings(true);
+              }}
+            >
+              <span>🔒 App Lock & Master PIN Settings</span>
+              <span>⚙️</span>
+            </button>
+
+            {/* Full Diary Backup Export */}
+            <button
+              type="button"
+              className="action-btn-row"
+              onClick={handleBackupExport}
+            >
+              <span>💾 Export Full Diary Data Backup (JSON)</span>
+              <span>⬇️</span>
+            </button>
+
+            {/* Profile Switcher */}
+            {onSwitchProfile && (
+              <button
+                type="button"
+                className="action-btn-row"
+                onClick={() => {
+                  hapticTap();
+                  onSwitchProfile();
+                }}
+              >
+                <span>👥 Switch / Manage On-Device Profiles</span>
+                <span>⇄</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Theme and Atmosphere Customization */}
         <div className="profile-section-card">
           <h4 className="profile-card-title">🎨 Appearance & Atmosphere</h4>
           <p className="profile-card-desc">
@@ -195,7 +724,10 @@ export default function ProfileScreen({
               <button
                 type="button"
                 className="action-btn theme-toggle-btn"
-                onClick={onThemeToggle}
+                onClick={() => {
+                  hapticTap();
+                  onThemeToggle();
+                }}
               >
                 {theme === 'dark' ? '☀️ Switch to Light' : '🌙 Switch to Dark'}
               </button>
@@ -209,7 +741,10 @@ export default function ProfileScreen({
                     key={p.id}
                     type="button"
                     className={`palette-chip-btn ${palette === p.id ? 'active' : ''}`}
-                    onClick={() => { hapticTap(); onPaletteChange(p.id); }}
+                    onClick={() => {
+                      hapticTap();
+                      onPaletteChange(p.id);
+                    }}
                     title={p.desc}
                   >
                     <span className="palette-swatch-dot" style={{ backgroundColor: p.swatch }} />
@@ -221,87 +756,15 @@ export default function ProfileScreen({
           </div>
         </div>
 
-        {/* Account Security & Password */}
-        <div className="profile-section-card">
-          <h4 className="profile-card-title">🛡️ Security & Privacy</h4>
-          <p className="profile-card-desc">
-            Manage your credentials and encryption vault settings.
-          </p>
-
-          <div className="security-actions-list">
-            {provider === 'email' && (
-              <button
-                type="button"
-                className="action-btn-row"
-                onClick={() => setShowPasswordChange(!showPasswordChange)}
-              >
-                <span>🔑 Change Account Password</span>
-                <span>{showPasswordChange ? '▲' : '▼'}</span>
-              </button>
-            )}
-
-            {showPasswordChange && (
-              <form onSubmit={handlePasswordChange} className="password-change-form">
-                {error && <div className="auth-alert error"><span>⚠️ {error}</span></div>}
-                <input
-                  type="password"
-                  className="lock-input"
-                  placeholder="New Password (min 6 chars)"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  required
-                />
-                <input
-                  type="password"
-                  className="lock-input"
-                  placeholder="Confirm New Password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  required
-                />
-                <button type="submit" className="action-btn primary" disabled={busy}>
-                  {busy ? 'Updating…' : 'Update Password'}
-                </button>
-              </form>
-            )}
-
-            <button
-              type="button"
-              className="action-btn-row"
-              onClick={() => setShowPrivacySettings(true)}
-            >
-              <span>🔒 App Lock & PIN Security Settings</span>
-              <span>⚙️</span>
-            </button>
-
-            <button
-              type="button"
-              className="action-btn-row"
-              onClick={handleBackupExport}
-            >
-              <span>💾 Export Full Diary Data Backup (JSON)</span>
-              <span>⬇️</span>
-            </button>
-
-            {onSwitchProfile && (
-              <button
-                type="button"
-                className="action-btn-row"
-                onClick={onSwitchProfile}
-              >
-                <span>👥 Switch / Manage Local Profiles</span>
-                <span>⇄</span>
-              </button>
-            )}
-          </div>
-        </div>
-
         {/* Sign Out Action */}
         <div className="profile-signout-card">
           <button
             type="button"
             className="action-btn danger signout-full-btn"
-            onClick={() => setShowConfirmSignOut(true)}
+            onClick={() => {
+              hapticTap();
+              setShowConfirmSignOut(true);
+            }}
           >
             🚪 Sign Out of Account
           </button>

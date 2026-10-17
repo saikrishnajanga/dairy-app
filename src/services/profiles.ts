@@ -155,7 +155,10 @@ export async function ensureGoogleProfile(account: {
   return ensureUserProfile({ ...account, provider: 'google' });
 }
 
-export function updateProfile(id: string, updates: Partial<Pick<Profile, 'name' | 'pinHash'>>) {
+export function updateProfile(
+  id: string,
+  updates: Partial<Pick<Profile, 'name' | 'email' | 'avatarUrl' | 'pinHash'>>
+) {
   const profiles = read();
   const index = profiles.findIndex(p => p.id === id);
   if (index >= 0) {
@@ -186,6 +189,28 @@ export async function verifyProfilePin(id: string, pin: string): Promise<boolean
 
 export function profileHasPin(id: string): boolean {
   return !!read().find(p => p.id === id)?.pinHash;
+}
+
+/** Change or set password/PIN on a profile, checking old PIN if one exists. */
+export async function changeProfilePassword(
+  profileId: string,
+  newPin: string,
+  currentPin?: string
+): Promise<void> {
+  const profile = read().find(p => p.id === profileId);
+  if (!profile) throw new Error('Profile not found.');
+
+  if (profile.pinHash) {
+    if (!currentPin) {
+      throw new Error('Please enter your current PIN/password.');
+    }
+    const matches = await verifyProfilePin(profileId, currentPin);
+    if (!matches) {
+      throw new Error('Current PIN/password is incorrect.');
+    }
+  }
+
+  await setProfilePin(profileId, newPin);
 }
 
 /** Delete a profile and every piece of data that belonged to it. */

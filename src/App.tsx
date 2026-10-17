@@ -535,7 +535,9 @@ export default function App() {
               title={authAccount ? `Signed in as ${authAccount.email}` : 'Profile'}
             >
               <span className="profile-avatar">
-                {(authAccount?.name || activeProfile?.name || 'S').trim().charAt(0).toUpperCase()}
+                {authAccount?.avatarUrl || activeProfile?.avatarUrl
+                  ? (authAccount?.avatarUrl || activeProfile?.avatarUrl)
+                  : (authAccount?.name || activeProfile?.name || 'S').trim().charAt(0).toUpperCase()}
               </span>
               <span className="profile-chip-name">
                 {authAccount?.name || activeProfile?.name || 'Profile'}
@@ -879,6 +881,10 @@ export default function App() {
               showToast={toast.show}
               onSwitchProfile={() => setShowProfiles(true)}
               onOpenAuthModal={() => setShowAuthModal(true)}
+              onProfileUpdate={(updatedProfile, updatedAccount) => {
+                if (updatedProfile !== undefined) setActiveProfileState(updatedProfile);
+                if (updatedAccount !== undefined) setAuthAccount(updatedAccount);
+              }}
             />
           )}
         </div>
