@@ -6,6 +6,7 @@ import {
 } from '../services/whatsappEnhancer';
 import { createTextEntry } from '../services/textDiary';
 import { hapticTap } from '../services/utils';
+import { TrashIcon } from './Icons';
 
 interface WhatsAppEnhancerScreenProps {
   showToast: (msg: string) => void;
@@ -258,7 +259,7 @@ export default function WhatsAppEnhancerScreen({
             </button>
             {inputText.length > 0 && (
               <button className="wa-btn-ghost danger" onClick={handleClear} title="Clear text">
-                🗑️ Clear
+                <TrashIcon size={14} style={{ marginRight: 6 }} /> Clear
               </button>
             )}
           </div>

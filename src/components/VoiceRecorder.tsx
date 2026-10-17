@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { transliterate, countWords } from '../services/transliterator'
 import { hapticTap } from '../services/utils'
+import { EditIcon, TrashIcon } from './Icons'
 
 interface Props {
   onSave: (teluguText: string, romanizedText: string) => void
@@ -336,7 +337,12 @@ export default function VoiceRecorder({ onSave }: Props) {
                   onClick={handleEditToggle}
                   aria-label={isEditingTranscript ? 'Save edits' : 'Edit transcript'}
                 >
-                  {isEditingTranscript ? '✅ Done' : '✏️ Edit'}
+                  {isEditingTranscript ? '✅ Done' : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <EditIcon size={13} />
+                      <span>Edit</span>
+                    </span>
+                  )}
                 </button>
               )}
               {isListening && (
@@ -415,7 +421,7 @@ export default function VoiceRecorder({ onSave }: Props) {
             <span className="btn-icon">{copied ? '✅' : '📋'}</span> {copied ? 'Copied!' : 'Copy'}
           </button>
           <button className="modern-btn cancel" onClick={handleClear}>
-            <span className="btn-icon">🗑️</span> Clear
+            <TrashIcon size={14} style={{ marginRight: 6 }} /> Clear
           </button>
         </div>
       )}

@@ -215,19 +215,21 @@ export async function listDocuments(): Promise<DocumentItem[]> {
     }
   }
 
-  return localDocs.map(d => ({
-    id: d.id,
-    userId: d.userId,
-    name: d.name,
-    fileSize: d.fileSize,
-    mimeType: d.mimeType,
-    category: d.category,
-    createdAt: d.createdAt,
-    updatedAt: d.updatedAt,
-    remoteUrl: d.remoteUrl,
-    storagePath: d.storagePath,
-    hasLocalBlob: !!d.blob,
-  }));
+  return localDocs
+    .filter(d => !(d as any).deletedAt)
+    .map(d => ({
+      id: d.id,
+      userId: d.userId,
+      name: d.name,
+      fileSize: d.fileSize,
+      mimeType: d.mimeType,
+      category: d.category,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
+      remoteUrl: d.remoteUrl,
+      storagePath: d.storagePath,
+      hasLocalBlob: !!d.blob,
+    }));
 }
 
 /**

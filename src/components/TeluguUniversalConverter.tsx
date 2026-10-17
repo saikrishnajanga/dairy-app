@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { TrashIcon } from './Icons';
 
 // ─── Comprehensive Telugu → Roman Transliteration ─────────────────────────
 
@@ -384,7 +385,8 @@ const TeluguUniversalConverter = ({ onBack, showToast, onSendToDiary }: Props) =
               onClick={() => { setInputText(''); setOutputText(''); }}
               className="action-btn"
             >
-              🗑️ Clear All
+              <TrashIcon size={14} style={{ marginRight: 6 }} />
+              <span>Clear All</span>
             </button>
           </div>
         )}

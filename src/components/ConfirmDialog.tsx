@@ -1,3 +1,5 @@
+import { TrashIcon } from './Icons';
+
 interface Props {
   message: string;
   title?: string;
@@ -16,7 +18,9 @@ export default function ConfirmDialog({
   return (
     <div className="pin-overlay" onClick={onCancel} role="dialog" aria-modal="true">
       <div className="pin-modal confirm-modal" onClick={e => e.stopPropagation()}>
-        <div className="confirm-icon-badge">🗑️</div>
+        <div className="confirm-icon-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <TrashIcon size={26} color="var(--danger)" />
+        </div>
         <h3 className="confirm-title">{title}</h3>
         <p className="confirm-message">
           {message}

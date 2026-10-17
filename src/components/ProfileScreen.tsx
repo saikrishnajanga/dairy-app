@@ -20,6 +20,7 @@ import { saveOrShareFile } from '../services/docExport';
 import ConfirmDialog from './ConfirmDialog';
 import PrivacyScreen from './PrivacyScreen';
 import { hapticTap } from '../services/utils';
+import { TrashIcon, EditIcon, DownloadIcon } from './Icons';
 
 const AVATAR_OPTIONS = [
   '👑', '⚡', '🦁', '🌸', '🚀', '🎨', '🕶️', '💎',
@@ -38,6 +39,7 @@ interface Props {
   showToast: (msg: string) => void;
   onSwitchProfile?: () => void;
   onOpenAuthModal?: () => void;
+  onNavigateToTrash?: () => void;
   onProfileUpdate?: (updatedProfile?: Profile | null, updatedAccount?: AuthAccount | null) => void;
 }
 
@@ -63,6 +65,7 @@ export default function ProfileScreen({
   showToast,
   onSwitchProfile,
   onOpenAuthModal,
+  onNavigateToTrash,
   onProfileUpdate,
 }: Props) {
   // Navigation / sub-screen states
@@ -356,7 +359,12 @@ export default function ProfileScreen({
                   setEditAvatar(activeAvatarSrc);
                 }}
               >
-                {isEditingProfile ? '✕ Cancel' : '✏️ Edit Profile'}
+                {isEditingProfile ? '✕ Cancel' : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <EditIcon size={14} />
+                    <span>Edit Profile</span>
+                  </span>
+                )}
               </button>
             </div>
 
@@ -747,8 +755,26 @@ export default function ProfileScreen({
               onClick={handleBackupExport}
             >
               <span>💾 Export Full Diary Data Backup (JSON)</span>
-              <span>⬇️</span>
+              <DownloadIcon size={16} />
             </button>
+
+            {/* Recycle Bin / Trash (30-Day Recovery) */}
+            {onNavigateToTrash && (
+              <button
+                type="button"
+                className="action-btn-row"
+                onClick={() => {
+                  hapticTap();
+                  onNavigateToTrash();
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <TrashIcon size={16} color="var(--danger)" />
+                  <span>Recycle Bin (Recover Deleted Items)</span>
+                </span>
+                <span>→</span>
+              </button>
+            )}
 
             {/* Profile Switcher */}
             {onSwitchProfile && (

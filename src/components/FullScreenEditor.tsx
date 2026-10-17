@@ -10,6 +10,8 @@ import { subscribeSyncState, type SyncState } from '../services/cloudSync';
 import { exportTextEntryDocx, saveOrShareFile } from '../services/docExport';
 import ConfirmDialog from './ConfirmDialog';
 import { hapticTap } from '../services/utils';
+import { moveNoteToTrash } from '../services/trash';
+import { TrashIcon } from './Icons';
 
 interface Props {
   entry: TextDiaryEntry;
@@ -482,9 +484,9 @@ export default function FullScreenEditor({
             type="button"
             className="editor-pill-btn delete-btn"
             onClick={() => setShowConfirmDelete(true)}
-            title="Delete this entry"
+            title="Move to Recycle Bin"
           >
-            🗑️
+            <TrashIcon size={16} />
           </button>
         </div>
       </header>
@@ -744,15 +746,16 @@ export default function FullScreenEditor({
       {/* Delete Confirmation Dialog */}
       {showConfirmDelete && (
         <ConfirmDialog
-          title="Delete Diary Entry?"
-          message={`Are you sure you want to permanently delete "${title}"? This cannot be undone.`}
-          confirmLabel="Delete"
+          title="Move to Recycle Bin?"
+          message={`Are you sure you want to delete "${title}"? It will be moved to the Recycle Bin and can be recovered within 30 days.`}
+          confirmLabel="Move to Bin"
           onConfirm={() => {
             setShowConfirmDelete(false);
+            moveNoteToTrash(entry);
             deleteTextEntry(entry.id);
             void dbDeleteDraft(entry.id);
             onDelete(entry.id);
-            showToast('🗑️ Entry deleted');
+            showToast('🗑️ Moved to Recycle Bin (30-day recovery)');
           }}
           onCancel={() => setShowConfirmDelete(false)}
         />

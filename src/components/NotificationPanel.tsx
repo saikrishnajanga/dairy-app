@@ -11,6 +11,7 @@ import {
 } from '../services/notifications';
 import type { AppNotification } from '../services/db';
 import { hapticTap } from '../services/utils';
+import { TrashIcon } from './Icons';
 
 interface Props {
   isOpen: boolean;
@@ -169,8 +170,8 @@ export default function NotificationPanel({ isOpen, onClose, showToast }: Props)
                 ✓ Mark all as read
               </button>
             )}
-            <button type="button" className="action-btn text-btn" onClick={handleClearAll} style={{ color: 'var(--danger)' }}>
-              🗑️ Clear all
+            <button type="button" className="action-btn text-btn" onClick={handleClearAll} style={{ color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <TrashIcon size={14} /> Clear all
             </button>
           </div>
         )}

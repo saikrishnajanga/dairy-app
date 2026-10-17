@@ -18,7 +18,10 @@ import AppLock from './components/AppLock';
 import Onboarding, { needsOnboarding } from './components/Onboarding';
 import ProfileSwitcher from './components/ProfileSwitcher';
 import ResetPasswordModal from './components/ResetPasswordModal';
+import TrashScreen from './components/TrashScreen';
+import { TrashIcon } from './components/Icons';
 import { useToast } from './hooks/useToast';
+import { moveVoiceToTrash, getTrashCount } from './services/trash';
 import {
   saveEntry, getEntries, deleteEntry, updateEntry, toggleFavorite,
   searchEntries, exportEntries, getEntryCount, exportAllData, DiaryEntry,
@@ -42,7 +45,7 @@ import { getNotifications, subscribeNotificationCount } from './services/notific
 import { hapticTap } from './services/utils';
 import type { AuthChangeEvent } from '@supabase/supabase-js';
 
-export type Tab = 'home' | 'voice' | 'diary' | 'locked' | 'documents' | 'whatsapp' | 'telugu_converter' | 'translate' | 'profile';
+export type Tab = 'home' | 'voice' | 'diary' | 'locked' | 'documents' | 'whatsapp' | 'telugu_converter' | 'translate' | 'profile' | 'trash';
 
 export const PALETTES = [
   { id: 'cozy', label: 'Cozy Café', swatch: '#f59e0b', desc: 'Mocha & Honey' },
@@ -281,7 +284,15 @@ export default function App() {
     toast.show(ok ? '✅ Entry saved!' : '⚠️ Storage full! Export & delete old entries.');
   };
 
-  const handleDelete = (id: string) => { deleteEntry(id); loadEntries(); toast.show('🗑️ Entry deleted'); };
+  const handleDelete = (id: string) => {
+    const entry = entries.find(e => e.id === id);
+    if (entry) {
+      moveVoiceToTrash(entry);
+    }
+    deleteEntry(id);
+    loadEntries();
+    toast.show('🗑️ Moved to Recycle Bin (30-day recovery)');
+  };
   const handleUpdate = (id: string, text: string) => { updateEntry(id, { romanizedText: text }); loadEntries(); toast.show('✏️ Entry updated'); };
   const handleFavorite = (id: string) => { toggleFavorite(id); loadEntries(); };
 
@@ -465,6 +476,17 @@ export default function App() {
               }}
             >
               <span className="nav-icon">🌐</span> Translator
+            </button>
+            <button
+              type="button"
+              className={`desktop-nav-link ${tab === 'trash' ? 'active' : ''}`}
+              onClick={() => {
+                hapticTap();
+                setTab('trash');
+              }}
+            >
+              <span className="nav-icon" style={{ display: 'inline-flex', alignItems: 'center' }}><TrashIcon size={15} /></span> Bin
+              {getTrashCount() > 0 && <span className="nav-badge" style={{ background: 'var(--danger)', color: '#fff' }}>{getTrashCount()}</span>}
             </button>
           </nav>
 
@@ -899,10 +921,19 @@ export default function App() {
               showToast={toast.show}
               onSwitchProfile={() => setShowProfiles(true)}
               onOpenAuthModal={() => setShowAuthModal(true)}
+              onNavigateToTrash={() => setTab('trash')}
               onProfileUpdate={(updatedProfile, updatedAccount) => {
                 if (updatedProfile !== undefined) setActiveProfileState(updatedProfile);
                 if (updatedAccount !== undefined) setAuthAccount(updatedAccount);
               }}
+            />
+          )}
+
+          {/* TAB 10: Recycle Bin / Trash */}
+          {tab === 'trash' && (
+            <TrashScreen
+              onBack={() => setTab('home')}
+              showToast={toast.show}
             />
           )}
         </div>
@@ -1089,6 +1120,31 @@ export default function App() {
                   <div className="more-card-text">
                     <div className="more-card-title">Profile & Settings</div>
                     <div className="more-card-desc">Themes, cloud sync, security & backup</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`more-menu-card ${tab === 'trash' ? 'active' : ''}`}
+                  onClick={() => {
+                    hapticTap();
+                    setTab('trash');
+                    setShowMoreMenu(false);
+                  }}
+                >
+                  <div className="more-card-icon" style={{ background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <TrashIcon size={20} />
+                  </div>
+                  <div className="more-card-text">
+                    <div className="more-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Recycle Bin</span>
+                      {getTrashCount() > 0 && (
+                        <span style={{ fontSize: 11, background: 'var(--danger)', color: '#fff', padding: '1px 7px', borderRadius: 9999, fontWeight: 700 }}>
+                          {getTrashCount()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="more-card-desc">Recover deleted notes, voice & files within 30 days</div>
                   </div>
                 </button>
               </div>

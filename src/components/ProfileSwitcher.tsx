@@ -6,6 +6,7 @@ import {
 import { isSupabaseConfigured } from '../services/supabase'
 import ConfirmDialog from './ConfirmDialog'
 import { hapticTap } from '../services/utils'
+import { TrashIcon } from './Icons'
 
 interface Props {
   profiles: Profile[]
@@ -123,7 +124,11 @@ export default function ProfileSwitcher({ profiles, activeId, googleEmail, onGoo
                     </span>
                   </span>
                   <button className="profile-delete" title="Delete this profile"
-                    onClick={e => { e.stopPropagation(); setPendingDelete(profile) }}>🗑️</button>
+                    onClick={e => { e.stopPropagation(); setPendingDelete(profile) }}
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
                 </div>
               ))}
             </div>

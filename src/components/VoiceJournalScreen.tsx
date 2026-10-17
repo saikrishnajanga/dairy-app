@@ -8,8 +8,9 @@ import {
 import { createTextEntry } from '../services/textDiary';
 import { saveEntry } from '../services/storage';
 import { transliterate } from '../services/transliterator';
-import { genId, fmtDate, fmtTime, hapticTap } from '../services/utils';
 import ConfirmDialog from './ConfirmDialog';
+import { moveVoiceToTrash } from '../services/trash';
+import { TrashIcon, BackIcon } from './Icons';
 
 interface Props {
   onBack: () => void;
@@ -236,8 +237,16 @@ export default function VoiceJournalScreen({ onBack, showToast }: Props) {
     if (!deleteTarget) return;
     hapticTap();
     try {
+      moveVoiceToTrash({
+        id: deleteTarget.id,
+        teluguText: deleteTarget.teluguTranscript,
+        romanizedText: deleteTarget.romanizedTranscript,
+        timestamp: deleteTarget.timestamp,
+        date: deleteTarget.date,
+        time: '',
+      });
       await dbDeleteAudioRecording(deleteTarget.id);
-      showToast('🗑️ Audio recording deleted');
+      showToast('🗑️ Moved to Recycle Bin (30-day recovery)');
       setDeleteTarget(null);
       await loadRecordings();
     } catch {
@@ -250,7 +259,8 @@ export default function VoiceJournalScreen({ onBack, showToast }: Props) {
       {/* Top Header */}
       <div className="voice-journal-header">
         <button type="button" className="action-btn back-btn" onClick={onBack}>
-          ← Back
+          <BackIcon size={16} style={{ marginRight: 6 }} />
+          <span>Back</span>
         </button>
         <div className="voice-journal-header-title">
           <h2>🎙️ Voice Journal</h2>
@@ -456,7 +466,8 @@ export default function VoiceJournalScreen({ onBack, showToast }: Props) {
                     className="action-btn-sm danger"
                     onClick={() => setDeleteTarget(rec)}
                   >
-                    🗑️ Delete
+                    <TrashIcon size={14} style={{ marginRight: 6 }} />
+                    <span>Delete</span>
                   </button>
                 </div>
               </div>
@@ -467,9 +478,9 @@ export default function VoiceJournalScreen({ onBack, showToast }: Props) {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Delete Voice Recording?"
-          message={`Are you sure you want to delete "${deleteTarget.title}"?`}
-          confirmLabel="Delete"
+          title="Move to Recycle Bin?"
+          message={`Are you sure you want to delete "${deleteTarget.title}"? It will be kept in the Recycle Bin and can be recovered within 30 days.`}
+          confirmLabel="Move to Bin"
           onConfirm={handleDeleteRecording}
           onCancel={() => setDeleteTarget(null)}
         />

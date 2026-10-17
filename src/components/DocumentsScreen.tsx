@@ -21,6 +21,7 @@ import { createTextEntry, type TextDiaryEntry } from '../services/textDiary';
 import ConfirmDialog from './ConfirmDialog';
 import { hapticTap } from '../services/utils';
 import PdfViewer from './PdfViewer';
+import { moveDocumentToTrash } from '../services/trash';
 
 // Modern SVG icons for document vault actions
 const UploadCloudIcon = ({ size = 18 }: { size?: number }) => (
@@ -221,11 +222,11 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
       handleClosePreview();
     }
     try {
-      await deleteDocument(target);
-      showToast(`Deleted "${target.name}"`);
+      await moveDocumentToTrash(target);
+      showToast(`Moved "${target.name}" to Recycle Bin`);
     } catch (err) {
       console.warn('Delete document notice:', err);
-      showToast(`Deleted "${target.name}"`);
+      showToast(`Moved "${target.name}" to Recycle Bin`);
     } finally {
       await loadDocs();
     }
@@ -905,7 +906,8 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                             className="action-btn"
                             onClick={() => setIsEditingText(true)}
                           >
-                            ✏️ Edit Here
+                            <EditPenIcon size={14} style={{ marginRight: 6 }} />
+                            <span>Edit Here</span>
                           </button>
                           <button
                             type="button"
@@ -947,21 +949,24 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                           className="action-btn primary"
                           onClick={() => handleDownload(previewDoc)}
                         >
-                          ⬇️ Download & Open
+                          <DownloadTrayIcon size={15} style={{ marginRight: 6 }} />
+                          <span>Download & Open</span>
                         </button>
                         <button
                           type="button"
                           className="action-btn"
                           onClick={() => handleOpenGoogleDocEditor(previewDoc)}
                         >
-                          📝 Open in Google Doc Editor
+                          <DocEditIcon size={14} style={{ marginRight: 6 }} />
+                          <span>Open in Google Doc Editor</span>
                         </button>
                         <button
                           type="button"
                           className="action-btn"
                           onClick={(e) => handleOpenRename(previewDoc, e)}
                         >
-                          ✏️ Rename
+                          <EditPenIcon size={14} style={{ marginRight: 6 }} />
+                          <span>Rename</span>
                         </button>
                       </div>
                     </div>
@@ -1084,9 +1089,9 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
       {/* Delete Confirmation Dialog */}
       {deleteTarget && (
         <ConfirmDialog
-          title="Delete Document?"
-          message={`Are you sure you want to delete "${deleteTarget.name}"? This file will be permanently removed.`}
-          confirmLabel="Delete"
+          title="Move to Recycle Bin?"
+          message={`Are you sure you want to delete "${deleteTarget.name}"? It will be kept in the Recycle Bin and can be recovered within 30 days.`}
+          confirmLabel="Move to Bin"
           onConfirm={handleConfirmDelete}
           onCancel={() => setDeleteTarget(null)}
         />

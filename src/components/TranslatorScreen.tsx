@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { useToast } from '../hooks/useToast'
+import { TrashIcon } from './Icons'
 import {
   translate, LANGUAGES, SPEECH_LANG_MAP,
   saveTranslation, getSavedTranslations, deleteTranslation,
@@ -191,7 +192,9 @@ export default function TranslatorScreen() {
                 </div>
                 <div className="saved-source">{s.sourceText}</div>
                 <div className="saved-target">{s.translatedText}</div>
-                <button className="saved-delete" onClick={() => handleDelete(s.id)}>🗑️</button>
+                <button className="saved-delete" onClick={() => handleDelete(s.id)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <TrashIcon size={14} />
+                </button>
               </div>
             ))}
           </div>

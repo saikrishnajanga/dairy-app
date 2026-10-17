@@ -12,6 +12,8 @@ import FullScreenEditor from './FullScreenEditor';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from '../hooks/useToast';
 import { hapticTap } from '../services/utils';
+import { moveNoteToTrash } from '../services/trash';
+import { TrashIcon } from './Icons';
 
 export default function TextDiaryScreen() {
   const [entries, setEntries] = useState<TextDiaryEntry[]>([]);
@@ -60,8 +62,9 @@ export default function TextDiaryScreen() {
 
   const confirmDeleteAction = () => {
     if (!confirmDelete) return;
+    moveNoteToTrash(confirmDelete);
     deleteTextEntry(confirmDelete.id);
-    toast.show('🗑️ Entry deleted');
+    toast.show('🗑️ Moved to Recycle Bin (30-day recovery)');
     setConfirmDelete(null);
     loadEntries();
   };
@@ -162,9 +165,9 @@ export default function TextDiaryScreen() {
                     type="button"
                     className="entry-delete-btn"
                     onClick={(e) => handleDeleteEntry(entry, e)}
-                    title="Delete entry"
+                    title="Move to Recycle Bin"
                   >
-                    🗑️
+                    <TrashIcon size={15} />
                   </button>
                 </div>
 

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { DiaryEntry as EntryType } from '../services/storage'
 import ConfirmDialog from './ConfirmDialog'
 import { hapticTap } from '../services/utils'
+import { EditIcon, TrashIcon } from './Icons'
 
 interface Props {
   entry: EntryType
@@ -205,7 +206,7 @@ export default function DiaryEntry({ entry, onDelete, onUpdate, onShare, onFavor
               ) : (
                 <>
                   <button className="modern-btn edit" onClick={() => setEditing(true)}>
-                    <span className="btn-icon">✏️</span> Edit
+                    <EditIcon size={14} style={{ marginRight: 6 }} /> Edit
                   </button>
                   <button className="modern-btn share" onClick={() => onShare(entry)}>
                     <span className="btn-icon">📤</span> Share
@@ -219,7 +220,7 @@ export default function DiaryEntry({ entry, onDelete, onUpdate, onShare, onFavor
                     <span className="btn-icon">{entry.favorite ? '⭐' : '☆'}</span> {entry.favorite ? 'Unfav' : 'Fav'}
                   </button>
                   <button className="modern-btn delete" onClick={() => setConfirmDelete(true)}>
-                    <span className="btn-icon">🗑️</span> Delete
+                    <TrashIcon size={14} style={{ marginRight: 6 }} /> Delete
                   </button>
                 </>
               )}
