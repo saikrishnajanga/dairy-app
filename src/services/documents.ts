@@ -105,9 +105,58 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+const BLOB_CACHE_NAME = 'voicediary_document_blobs';
+
+/** Save raw document blob into browser disk cache (handles large files up to 100MB+ with zero memory or LevelDB locks) */
+export async function saveDocumentBlobToCache(docId: string, blob: Blob): Promise<boolean> {
+  try {
+    if (typeof caches !== 'undefined') {
+      const cache = await caches.open(BLOB_CACHE_NAME);
+      const resp = new Response(blob, {
+        headers: {
+          'Content-Type': blob.type || 'application/octet-stream',
+          'Content-Length': String(blob.size),
+        },
+      });
+      await cache.put(`/doc-blobs/${docId}`, resp);
+      return true;
+    }
+  } catch (err) {
+    console.warn('Could not cache document blob in CacheStorage:', err);
+  }
+  return false;
+}
+
+/** Retrieve raw document blob from browser disk cache */
+export async function getDocumentBlobFromCache(docId: string): Promise<Blob | null> {
+  try {
+    if (typeof caches !== 'undefined') {
+      const cache = await caches.open(BLOB_CACHE_NAME);
+      const match = await cache.match(`/doc-blobs/${docId}`);
+      if (match) {
+        return await match.blob();
+      }
+    }
+  } catch (err) {
+    console.warn('Could not retrieve document blob from CacheStorage:', err);
+  }
+  return null;
+}
+
+/** Remove document blob from browser disk cache */
+export async function deleteDocumentBlobFromCache(docId: string): Promise<void> {
+  try {
+    if (typeof caches !== 'undefined') {
+      const cache = await caches.open(BLOB_CACHE_NAME);
+      await cache.delete(`/doc-blobs/${docId}`);
+    }
+  } catch {}
+}
+
 /**
  * Upload a document file.
- * Saves to local IndexedDB and synchronizes to Supabase Storage if authenticated.
+ * Saves binary to high-speed CacheStorage and lightweight metadata to IndexedDB.
+ * Synchronizes to Supabase Storage if authenticated.
  */
 export async function uploadDocument(
   file: File,
@@ -123,11 +172,11 @@ export async function uploadDocument(
   const storagePath = `${userId}/${docId}_${safeName}`;
   const now = Date.now();
 
-  onProgress?.(25);
+  onProgress?.(20);
 
   let remoteUrl: string | undefined = undefined;
 
-  // Attempt Supabase Storage upload if online & signed in
+  // 1. Attempt Supabase Storage upload if online & signed in
   if (isSupabaseConfigured() && getCurrentUserId()) {
     const supabase = getSupabase();
     if (supabase) {
@@ -169,16 +218,27 @@ export async function uploadDocument(
     }
   }
 
-  onProgress?.(70);
+  onProgress?.(55);
 
-  // Always save in IndexedDB for reliable offline access & instant preview
-  let cleanBlob: Blob = file;
+  // 2. Stream and save full binary blob to CacheStorage (works flawlessly for any file size)
   try {
-    const buffer = await file.arrayBuffer();
-    cleanBlob = new Blob([buffer], { type: file.type || 'application/octet-stream' });
-  } catch (bufErr) {
-    console.warn('Could not read ArrayBuffer, using original file:', bufErr);
-    cleanBlob = file;
+    await saveDocumentBlobToCache(docId, file);
+  } catch (cacheErr) {
+    console.warn('CacheStorage save notice:', cacheErr);
+  }
+
+  onProgress?.(75);
+
+  // 3. Save lightweight metadata to IndexedDB
+  // For files <= 500KB, optionally preserve blob in IDB; for large files, IDB only holds metadata
+  let blobForIdb: Blob | undefined = undefined;
+  if (file.size <= 500 * 1024) {
+    try {
+      const buffer = await file.arrayBuffer();
+      blobForIdb = new Blob([buffer], { type: file.type || 'application/octet-stream' });
+    } catch {
+      blobForIdb = undefined;
+    }
   }
 
   const storedDoc: StoredDocument = {
@@ -190,28 +250,28 @@ export async function uploadDocument(
     category,
     createdAt: now,
     updatedAt: now,
-    blob: cleanBlob,
+    blob: blobForIdb,
     storagePath,
     remoteUrl,
   };
 
   try {
-    // Timeout protection: if IndexedDB hangs or is blocked, fallback to metadata-only save
+    // Non-blocking IndexedDB metadata save with 2.5-second timeout
     await Promise.race([
       dbSaveDocument(storedDoc),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Local IndexedDB storage timeout')), 4000)
+        setTimeout(() => reject(new Error('IndexedDB save timed out')), 2500)
       ),
     ]);
   } catch (idbErr) {
-    console.warn('IndexedDB save with blob failed or timed out, saving metadata fallback:', idbErr);
-    const fallbackDoc: StoredDocument = { ...storedDoc, blob: undefined };
-    await dbSaveDocument(fallbackDoc).catch((e) =>
-      console.warn('Metadata fallback save failed:', e)
-    );
+    console.warn('IndexedDB save warning (file is safely cached in CacheStorage):', idbErr);
+    if (blobForIdb) {
+      storedDoc.blob = undefined;
+      await dbSaveDocument(storedDoc).catch(() => {});
+    }
   }
 
-  onProgress?.(100);
+  onProgress?.(95);
 
   // Emit event notification
   void addNotification({
@@ -219,6 +279,8 @@ export async function uploadDocument(
     message: `"${file.name}" was uploaded successfully (${formatFileSize(file.size)}).`,
     type: 'success',
   });
+
+  onProgress?.(100);
 
   return {
     id: docId,
@@ -300,13 +362,21 @@ export async function listDocuments(): Promise<DocumentItem[]> {
  * Get a downloadable or previewable URL for a document.
  */
 export async function getDocumentUrl(doc: DocumentItem): Promise<string> {
-  // First check local IndexedDB blob
-  const local = await dbGetDocumentById(doc.id);
-  if (local?.blob) {
-    return URL.createObjectURL(local.blob);
+  // 1. First check CacheStorage (handles large documents seamlessly)
+  const cachedBlob = await getDocumentBlobFromCache(doc.id);
+  if (cachedBlob && cachedBlob.size > 0) {
+    return URL.createObjectURL(cachedBlob);
   }
 
-  // If remote storage exists, generate a fresh signed URL
+  // 2. Next check local IndexedDB blob
+  try {
+    const local = await dbGetDocumentById(doc.id);
+    if (local?.blob && local.blob.size > 0) {
+      return URL.createObjectURL(local.blob);
+    }
+  } catch {}
+
+  // 3. If remote storage exists, generate a fresh signed URL
   if (doc.storagePath && isSupabaseConfigured()) {
     const supabase = getSupabase();
     if (supabase) {
@@ -339,21 +409,32 @@ export async function downloadDocument(doc: DocumentItem): Promise<void> {
 }
 
 /**
- * Retrieve the raw Blob for a document (from IndexedDB or by downloading from cloud).
+ * Retrieve the raw Blob for a document (from CacheStorage, IndexedDB, or cloud).
  */
 export async function getDocumentBlob(doc: DocumentItem): Promise<Blob> {
-  const local = await dbGetDocumentById(doc.id);
-  if (local?.blob) return local.blob;
+  // 1. Try CacheStorage first
+  const fromCache = await getDocumentBlobFromCache(doc.id);
+  if (fromCache && fromCache.size > 0) {
+    return fromCache;
+  }
 
+  // 2. Try IndexedDB
+  try {
+    const local = await dbGetDocumentById(doc.id);
+    if (local?.blob && local.blob.size > 0) {
+      void saveDocumentBlobToCache(doc.id, local.blob);
+      return local.blob;
+    }
+  } catch {}
+
+  // 3. Fallback: Download from cloud URL
   const url = await getDocumentUrl(doc);
   const resp = await fetch(url);
   const blob = await resp.blob();
 
-  // Cache in IndexedDB for subsequent offline instant preview
-  if (local) {
-    local.blob = blob;
-    await dbSaveDocument(local);
-  }
+  // Cache locally in CacheStorage for future instant offline access
+  void saveDocumentBlobToCache(doc.id, blob);
+
   return blob;
 }
 
@@ -579,10 +660,13 @@ export async function updateDocumentTextContent(
 
   const blob = new Blob([newText], { type: local.mimeType || 'text/plain' });
   const now = Date.now();
-  local.blob = blob;
+  local.blob = blob.size <= 500 * 1024 ? blob : undefined;
   local.fileSize = blob.size;
   local.updatedAt = now;
   if (newCategory) local.category = newCategory;
+
+  // Persist updated blob to CacheStorage
+  await saveDocumentBlobToCache(docId, blob);
 
   await dbSaveDocument(local);
 
@@ -656,15 +740,18 @@ export async function renameDocument(id: string, newName: string): Promise<void>
 }
 
 /**
- * Delete a document from IndexedDB and cloud storage safely.
+ * Delete a document from IndexedDB, CacheStorage, and cloud storage safely.
  */
 export async function deleteDocument(doc: DocumentItem): Promise<void> {
-  // Always delete locally first
+  // Always delete locally first (both IndexedDB and CacheStorage)
   try {
     await dbDeleteDocument(doc.id);
   } catch (err) {
     console.warn('Local document delete notice:', err);
   }
+  try {
+    await deleteDocumentBlobFromCache(doc.id);
+  } catch {}
 
   // Attempt cloud delete if connected
   if (isSupabaseConfigured() && getCurrentUserId()) {

@@ -57,7 +57,11 @@ export interface AppNotification {
   actionUrl?: string;
 }
 
+let dbInstance: IDBDatabase | null = null;
+
 function openDB(): Promise<IDBDatabase> {
+  if (dbInstance) return Promise.resolve(dbInstance);
+
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       reject(new Error('IndexedDB not supported in this environment'));
@@ -87,7 +91,17 @@ function openDB(): Promise<IDBDatabase> {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      dbInstance = request.result;
+      dbInstance.onversionchange = () => {
+        try { dbInstance?.close(); } catch {}
+        dbInstance = null;
+      };
+      dbInstance.onclose = () => {
+        dbInstance = null;
+      };
+      resolve(dbInstance);
+    };
     request.onerror = () => reject(request.error);
   });
 }
@@ -103,33 +117,47 @@ export async function dbSaveDocument(doc: StoredDocument): Promise<void> {
       const req = store.put(doc);
       let settled = false;
 
+      // Fail-safe transaction timeout: aborts if stalled
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try { tx.abort(); } catch {}
+          reject(new Error('IndexedDB save transaction timed out'));
+        }
+      }, 3000);
+
       req.onsuccess = () => {
         if (!settled) {
           settled = true;
+          clearTimeout(timer);
           resolve();
         }
       };
       req.onerror = () => {
         if (!settled) {
           settled = true;
+          clearTimeout(timer);
           reject(req.error || new Error('Put document failed'));
         }
       };
       tx.oncomplete = () => {
         if (!settled) {
           settled = true;
+          clearTimeout(timer);
           resolve();
         }
       };
       tx.onerror = () => {
         if (!settled) {
           settled = true;
+          clearTimeout(timer);
           reject(tx.error || new Error('Transaction failed'));
         }
       };
       tx.onabort = () => {
         if (!settled) {
           settled = true;
+          clearTimeout(timer);
           reject(tx.error || new Error('Transaction aborted'));
         }
       };
