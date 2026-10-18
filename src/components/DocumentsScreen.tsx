@@ -258,9 +258,14 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
         ext === 'log' ||
         ext === 'docx' ||
         ext === 'doc' ||
+        ext === 'gdoc' ||
+        ext === 'odt' ||
+        ext === 'rtf' ||
         ext === 'pdf' ||
         doc.mimeType?.startsWith('text/') ||
         doc.mimeType?.includes('word') ||
+        doc.mimeType?.includes('officedocument') ||
+        doc.mimeType?.includes('google-apps') ||
         doc.mimeType?.includes('pdf');
 
       if (isReadableDoc) {
@@ -332,9 +337,14 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
         ext === 'md' ||
         ext === 'docx' ||
         ext === 'doc' ||
+        ext === 'gdoc' ||
+        ext === 'odt' ||
+        ext === 'rtf' ||
         ext === 'pdf' ||
         doc.mimeType?.includes('text') ||
         doc.mimeType?.includes('word') ||
+        doc.mimeType?.includes('officedocument') ||
+        doc.mimeType?.includes('google-apps') ||
         doc.mimeType?.includes('pdf')
       ) {
         text = await getDocumentTextContent(doc);
@@ -431,8 +441,17 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
   const getDocTypeInfo = (name: string, mime: string) => {
     const ext = name.split('.').pop()?.toLowerCase() || '';
     if (ext === 'pdf' || mime?.includes('pdf')) return { icon: '📕', type: 'pdf', label: 'PDF Document' };
-    if (ext === 'doc' || ext === 'docx' || mime?.includes('word'))
-      return { icon: '📘', type: 'word', label: 'Word Document' };
+    if (
+      ext === 'doc' ||
+      ext === 'docx' ||
+      ext === 'gdoc' ||
+      ext === 'odt' ||
+      ext === 'rtf' ||
+      mime?.includes('word') ||
+      mime?.includes('officedocument') ||
+      mime?.includes('google-apps')
+    )
+      return { icon: '📘', type: 'word', label: ext === 'gdoc' || mime?.includes('google-apps') ? 'Google Doc' : 'Word Document' };
     if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'webp' || mime?.includes('image'))
       return { icon: '🖼️', type: 'image', label: 'Image' };
     if (ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv' || mime?.includes('text'))
@@ -456,7 +475,7 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
             type="file"
             ref={fileInputRef}
             style={{ display: 'none' }}
-            accept={ALLOWED_EXTENSIONS.join(',')}
+            accept=".pdf,.doc,.docx,.gdoc,.odt,.rtf,.txt,.md,.png,.jpg,.jpeg,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.google-apps.document,application/vnd.oasis.opendocument.text,application/rtf,text/rtf,text/plain,image/*"
             onChange={handleFileUpload}
           />
           <button
@@ -473,12 +492,34 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
             className="vault-upload-btn-bright"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            title="Upload a PDF, Word document, image, or text file"
+            title="Upload a Google Doc, Word document, PDF, image, or text file"
           >
             <UploadCloudIcon size={19} />
             <span>{isUploading ? `Uploading (${uploadPercent}%)…` : 'Upload File'}</span>
           </button>
         </div>
+      </div>
+
+      {/* Helpful Google Docs & Word Support Tip */}
+      <div
+        className="vault-helper-strip"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 14px',
+          background: 'var(--surface-raised)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-md)',
+          fontSize: '12px',
+          color: 'var(--text-secondary)',
+          margin: '-8px 0 12px',
+        }}
+      >
+        <span>💡</span>
+        <span>
+          <strong>Google Docs & Word:</strong> Supports <code>.docx</code>, <code>.doc</code>, <code>.gdoc</code>, <code>.odt</code>, and <code>.pdf</code>. (From Google Docs, you can also click <em>File → Download → Microsoft Word (.docx)</em> to edit offline.)
+        </span>
       </div>
 
       {isUploading && (
@@ -726,8 +767,30 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                     }}
                   >
                     <DocEditIcon size={15} />
-                    <span>Edit like Google Doc</span>
+                    <span>Edit Doc</span>
                   </button>
+                )}
+
+                {/* Direct Google Docs web link if link found */}
+                {previewText.includes('docs.google.com') && (
+                  <a
+                    href={previewText.match(/https:\/\/docs\.google\.com\/[^\s\)]+/)?.[0] || 'https://docs.google.com'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="doc-header-btn"
+                    style={{
+                      background: 'rgba(66, 133, 244, 0.15)',
+                      color: '#4285f4',
+                      border: '1px solid #4285f4',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    🌐 Open in Google Docs
+                  </a>
                 )}
 
                 {/* Text View / Edit mode toggle */}

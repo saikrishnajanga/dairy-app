@@ -22,7 +22,40 @@ import { saveOrShareFile } from './docExport';
 import JSZip from 'jszip';
 
 export const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB limit
-export const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg'];
+export const ALLOWED_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.gdoc',
+  '.odt',
+  '.rtf',
+  '.txt',
+  '.md',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+];
+
+export const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.google-apps.document',
+  'application/vnd.oasis.opendocument.text',
+  'application/rtf',
+  'text/rtf',
+  'text/plain',
+  'text/markdown',
+  'application/json',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/octet-stream',
+  'application/zip',
+  'application/x-zip-compressed',
+];
+
 export const DOCUMENT_CATEGORIES = ['All', 'Personal', 'Work', 'Journal', 'Receipts', 'Other'] as const;
 
 export type DocumentCategory = typeof DOCUMENT_CATEGORIES[number];
@@ -46,11 +79,18 @@ export function validateDocumentFile(file: File): { valid: boolean; error?: stri
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return { valid: false, error: 'File size exceeds 25 MB limit.' };
   }
-  const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+  const nameParts = file.name.split('.');
+  const ext = nameParts.length > 1 ? '.' + nameParts.pop()?.toLowerCase() : '';
+  const mime = file.type?.toLowerCase() || '';
+
+  const isAllowedExt = ext ? ALLOWED_EXTENSIONS.includes(ext) : false;
+  const isAllowedMime = mime ? ALLOWED_MIME_TYPES.some((m) => mime.includes(m) || m.includes(mime)) : false;
+
+  // Accept file if it matches allowed extension OR allowed MIME type (or text/image)
+  if (!isAllowedExt && !isAllowedMime && !mime.startsWith('text/') && !mime.startsWith('image/')) {
     return {
       valid: false,
-      error: `Unsupported file format (${ext}). Supported: PDF, DOC, DOCX, TXT, Images.`,
+      error: `Unsupported format (${ext || mime || 'unknown'}). Supported: Google Docs (.docx, .gdoc, .odt), Word (.docx, .doc), PDF, Text, and Images.`,
     };
   }
   return { valid: true };
@@ -323,8 +363,100 @@ export async function extractDocxText(blob: Blob): Promise<string> {
     if (lines.length > 0) {
       return lines.join('\n\n');
     }
+
+    // Fallback: extract using regex from XML if namespace parsing yielded no w:p
+    const matches = xmlText.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+    if (matches && matches.length > 0) {
+      const text = matches
+        .map((m) => m.replace(/<[^>]+>/g, ''))
+        .filter(Boolean)
+        .join(' ');
+      if (text.trim()) return text;
+    }
   } catch (err) {
     console.warn('Docx text extraction notice:', err);
+  }
+  return '';
+}
+
+/**
+ * Extract text from an OpenDocument Text (.odt) file blob using JSZip.
+ */
+export async function extractOdtText(blob: Blob): Promise<string> {
+  try {
+    const zip = await JSZip.loadAsync(blob);
+    const contentFile = zip.file('content.xml');
+    if (!contentFile) return '';
+    const xmlText = await contentFile.async('text');
+    if (!xmlText) return '';
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'application/xml');
+    const pNodes = doc.getElementsByTagName('text:p');
+    const lines: string[] = [];
+
+    for (let i = 0; i < pNodes.length; i++) {
+      const text = pNodes[i].textContent || '';
+      if (text.trim()) lines.push(text.trim());
+    }
+
+    if (lines.length > 0) {
+      return lines.join('\n\n');
+    }
+  } catch (err) {
+    console.warn('ODT text extraction notice:', err);
+  }
+  return '';
+}
+
+/**
+ * Parse a Google Docs shortcut file (.gdoc) created by Google Drive.
+ */
+export async function extractGdocInfo(blob: Blob): Promise<{ url?: string; text: string }> {
+  try {
+    const raw = await blob.text();
+    try {
+      const json = JSON.parse(raw);
+      if (json.url) {
+        return {
+          url: json.url,
+          text: `📄 Google Doc Link: ${json.url}\n\n(This file is a Google Drive shortcut. Tap "Open in Google Docs" to view live in Google Docs, or download as .docx from Google Drive to edit offline.)`,
+        };
+      }
+    } catch {
+      return { text: raw };
+    }
+  } catch (err) {
+    console.warn('Gdoc parse notice:', err);
+  }
+  return { text: '(Google Doc Link File)' };
+}
+
+/**
+ * Extract readable text from binary legacy Word (.doc) files.
+ */
+export async function extractLegacyDocText(blob: Blob): Promise<string> {
+  try {
+    const buffer = await blob.arrayBuffer();
+    const uint8 = new Uint8Array(buffer);
+    let result = '';
+    let current = '';
+    for (let i = 0; i < uint8.length; i++) {
+      const b = uint8[i];
+      if ((b >= 32 && b <= 126) || b === 10 || b === 13) {
+        current += String.fromCharCode(b);
+      } else {
+        if (current.trim().length >= 4) {
+          result += current.trim() + '\n';
+        }
+        current = '';
+      }
+    }
+    if (result.trim()) {
+      return result.trim();
+    }
+  } catch (err) {
+    console.warn('Legacy .doc extraction notice:', err);
   }
   return '';
 }
@@ -367,18 +499,36 @@ export async function extractPdfText(blob: Blob): Promise<string> {
 }
 
 /**
- * Read the text content of a text-based document (.txt, .md, text/*), Word (.docx), or PDF (.pdf).
+ * Read the text content of a text-based document (.txt, .md, text/*), Word (.docx, .doc), Google Doc (.gdoc, .odt), or PDF (.pdf).
  */
 export async function getDocumentTextContent(doc: DocumentItem): Promise<string> {
   const blob = await getDocumentBlob(doc);
   const ext = doc.name.split('.').pop()?.toLowerCase() || '';
 
-  if (ext === 'docx' || ext === 'doc') {
+  if (ext === 'docx') {
     const extracted = await extractDocxText(blob);
     if (extracted && extracted.trim()) {
       return extracted;
     }
-    return '(Word Document: Use "Edit like Google Doc" to view and edit formatted text)';
+    return '(Word Document: Tap "Edit Doc" to view and edit formatted text)';
+  }
+
+  if (ext === 'doc') {
+    const fromDocx = await extractDocxText(blob);
+    if (fromDocx && fromDocx.trim()) return fromDocx;
+    const legacy = await extractLegacyDocText(blob);
+    if (legacy && legacy.trim()) return legacy;
+    return '(Word Document: Tap "Edit Doc" to view and edit formatted text)';
+  }
+
+  if (ext === 'gdoc' || doc.mimeType?.includes('google-apps')) {
+    const gdoc = await extractGdocInfo(blob);
+    return gdoc.text;
+  }
+
+  if (ext === 'odt') {
+    const extracted = await extractOdtText(blob);
+    if (extracted && extracted.trim()) return extracted;
   }
 
   if (ext === 'pdf' || doc.mimeType?.includes('pdf')) {
@@ -386,7 +536,7 @@ export async function getDocumentTextContent(doc: DocumentItem): Promise<string>
     if (extracted && extracted.trim()) {
       return extracted;
     }
-    return '(PDF Document: Tap "Edit like Google Doc" to view and edit extracted text)';
+    return '(PDF Document: Tap "Edit Doc" to view and edit extracted text)';
   }
 
   return await blob.text();
