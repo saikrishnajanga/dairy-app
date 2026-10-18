@@ -242,12 +242,12 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
     setPreviewBlob(null);
 
     try {
-      const [url, blob] = await Promise.all([
-        getDocumentUrl(doc),
-        getDocumentBlob(doc),
-      ]);
-      setPreviewUrl(url);
+      const blob = await getDocumentBlob(doc);
       setPreviewBlob(blob);
+      try {
+        const url = URL.createObjectURL(blob);
+        setPreviewUrl(url);
+      } catch {}
 
       const ext = doc.name.split('.').pop()?.toLowerCase() || '';
       const isReadableDoc =
@@ -279,18 +279,19 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
             text.includes('word/document.xml')
           ) {
             const extracted = await extractDocxText(blob);
-            text = extracted || '(Word Document: Tap "Edit like Google Doc" to view and edit formatted text)';
+            text = extracted || '(Word Document: Tap "Edit Doc" or "Open in Google Doc Editor" to view and edit formatted text)';
           }
           setPreviewText(text);
           setEditedText(text);
         } catch {
-          setPreviewText('(Unable to read text content)');
+          setPreviewText('(Unable to read text content - Tap "Edit Doc" to edit directly)');
         } finally {
           setIsTextLoading(false);
         }
       }
     } catch (e: any) {
-      showToast('Could not open file: ' + (e?.message || e));
+      console.warn('Could not open file preview:', e);
+      showToast('Could not load file: ' + (e?.message || e));
     }
   };
 
@@ -865,9 +866,18 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                           onDownload={() => handleDownload(previewDoc)}
                         />
                       ) : (
-                        <div className="doc-loading-view" style={{ padding: '60px 20px' }}>
+                        <div className="doc-loading-view" style={{ padding: '60px 20px', textAlign: 'center' }}>
                           <div className="doc-spinner" />
                           <p style={{ marginTop: '12px' }}>Loading PDF document…</p>
+                          <button
+                            type="button"
+                            className="action-btn primary"
+                            style={{ marginTop: '16px' }}
+                            onClick={() => handleDownload(previewDoc)}
+                          >
+                            <DownloadTrayIcon size={15} style={{ marginRight: 6 }} />
+                            <span>Download PDF Directly</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -875,12 +885,14 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                 }
 
                 // 3. TEXT & WORD DOCUMENT PREVIEW / INLINE EDITOR
-                if (typeInfo.type === 'text' || (typeInfo.type === 'word' && (previewText || isTextLoading))) {
+                if (typeInfo.type === 'text' || typeInfo.type === 'word') {
                   if (isTextLoading) {
                     return (
-                      <div className="doc-loading-view">
+                      <div className="doc-loading-view" style={{ padding: '60px 20px' }}>
                         <div className="doc-spinner" />
-                        <p>Loading document content…</p>
+                        <p style={{ marginTop: '12px' }}>
+                          {typeInfo.type === 'word' ? 'Extracting Word document text…' : 'Loading document content…'}
+                        </p>
                       </div>
                     );
                   }
@@ -1006,11 +1018,12 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                       <p className="doc-generic-help">
                         This file format is ready for download or external viewing in Microsoft Word or Google Docs.
                       </p>
-                      <div style={{ display: 'flex', gap: '10px', marginTop: 18, justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: 18, justifyContent: 'center', flexWrap: 'wrap' }}>
                         <button
                           type="button"
                           className="action-btn primary"
                           onClick={() => handleDownload(previewDoc)}
+                          style={{ whiteSpace: 'nowrap' }}
                         >
                           <DownloadTrayIcon size={15} style={{ marginRight: 6 }} />
                           <span>Download & Open</span>
@@ -1019,6 +1032,7 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                           type="button"
                           className="action-btn"
                           onClick={() => handleOpenGoogleDocEditor(previewDoc)}
+                          style={{ whiteSpace: 'nowrap' }}
                         >
                           <DocEditIcon size={14} style={{ marginRight: 6 }} />
                           <span>Open in Google Doc Editor</span>
@@ -1027,6 +1041,7 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                           type="button"
                           className="action-btn"
                           onClick={(e) => handleOpenRename(previewDoc, e)}
+                          style={{ whiteSpace: 'nowrap' }}
                         >
                           <EditPenIcon size={14} style={{ marginRight: 6 }} />
                           <span>Rename</span>

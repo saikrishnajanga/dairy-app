@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.js?url';
 
-// Configure PDF.js worker
-if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
+// Configure PDF.js worker with bundled local asset (no external CDN network dependency)
+if (typeof window !== 'undefined') {
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+  } catch {}
 }
 
 interface Props {
@@ -40,7 +43,12 @@ export default function PdfViewer({ blob, fileName, onOpenEditor, onDownload }: 
           useSystemFonts: true,
         });
 
-        const pdf = await loadingTask.promise;
+        // 7-second timeout protection so PDF rendering never hangs indefinitely
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('PDF preview rendering timed out. You can download or edit directly.')), 7000)
+        );
+
+        const pdf = await Promise.race([loadingTask.promise, timeoutPromise]);
         if (cancelled) return;
 
         pdfDocRef.current = pdf;

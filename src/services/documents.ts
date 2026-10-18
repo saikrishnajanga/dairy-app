@@ -105,57 +105,77 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-const BLOB_CACHE_NAME = 'voicediary_document_blobs';
+// ─── Multi-Tier Document Blob Storage (Memory + Native FS + IndexedDB) ──────
 
-/** Save raw document blob into browser disk cache (handles large files up to 100MB+ with zero memory or LevelDB locks) */
-export async function saveDocumentBlobToCache(docId: string, blob: Blob): Promise<boolean> {
+/** In-memory blob cache for 0ms instant preview immediately after upload or fetch */
+const memoryBlobCache = new Map<string, Blob>();
+
+/** Save document binary to Android/iOS native filesystem storage */
+async function saveToNativeFs(docId: string, blob: Blob): Promise<boolean> {
   try {
-    if (typeof caches !== 'undefined') {
-      const cache = await caches.open(BLOB_CACHE_NAME);
-      const resp = new Response(blob, {
-        headers: {
-          'Content-Type': blob.type || 'application/octet-stream',
-          'Content-Length': String(blob.size),
-        },
-      });
-      await cache.put(`/doc-blobs/${docId}`, resp);
-      return true;
+    const { Capacitor } = await import('@capacitor/core');
+    if (!Capacitor.isNativePlatform()) return false;
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
     }
+    const base64 = btoa(binary);
+    await Filesystem.writeFile({
+      path: `doc_vault/${docId}`,
+      data: base64,
+      directory: Directory.Data,
+      recursive: true,
+    });
+    return true;
   } catch (err) {
-    console.warn('Could not cache document blob in CacheStorage:', err);
+    console.warn('Native filesystem write notice:', err);
+    return false;
   }
-  return false;
 }
 
-/** Retrieve raw document blob from browser disk cache */
-export async function getDocumentBlobFromCache(docId: string): Promise<Blob | null> {
+/** Read document binary from Android/iOS native filesystem storage */
+async function readFromNativeFs(docId: string, mimeType: string): Promise<Blob | null> {
   try {
-    if (typeof caches !== 'undefined') {
-      const cache = await caches.open(BLOB_CACHE_NAME);
-      const match = await cache.match(`/doc-blobs/${docId}`);
-      if (match) {
-        return await match.blob();
+    const { Capacitor } = await import('@capacitor/core');
+    if (!Capacitor.isNativePlatform()) return null;
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const res = await Filesystem.readFile({
+      path: `doc_vault/${docId}`,
+      directory: Directory.Data,
+    });
+    if (res && res.data) {
+      const binary = atob(res.data as string);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
       }
+      return new Blob([bytes], { type: mimeType || 'application/octet-stream' });
     }
-  } catch (err) {
-    console.warn('Could not retrieve document blob from CacheStorage:', err);
-  }
+  } catch {}
   return null;
 }
 
-/** Remove document blob from browser disk cache */
-export async function deleteDocumentBlobFromCache(docId: string): Promise<void> {
+/** Delete document binary from Android/iOS native filesystem storage */
+async function deleteFromNativeFs(docId: string): Promise<void> {
   try {
-    if (typeof caches !== 'undefined') {
-      const cache = await caches.open(BLOB_CACHE_NAME);
-      await cache.delete(`/doc-blobs/${docId}`);
-    }
+    const { Capacitor } = await import('@capacitor/core');
+    if (!Capacitor.isNativePlatform()) return;
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    await Filesystem.deleteFile({
+      path: `doc_vault/${docId}`,
+      directory: Directory.Data,
+    });
   } catch {}
 }
 
 /**
  * Upload a document file.
- * Saves binary to high-speed CacheStorage and lightweight metadata to IndexedDB.
+ * Saves binary to in-memory cache, native filesystem (on Android), and local IndexedDB.
  * Synchronizes to Supabase Storage if authenticated.
  */
 export async function uploadDocument(
@@ -174,16 +194,30 @@ export async function uploadDocument(
 
   onProgress?.(20);
 
+  // Convert raw File to a detached in-memory Blob to eliminate native descriptor binding issues
+  let cleanBlob: Blob = file;
+  try {
+    const buffer = await file.arrayBuffer();
+    cleanBlob = new Blob([buffer], { type: file.type || 'application/octet-stream' });
+  } catch {
+    cleanBlob = file;
+  }
+
+  // 1. Immediately cache in memory so preview is available in 0ms right after upload
+  memoryBlobCache.set(docId, cleanBlob);
+
+  onProgress?.(40);
+
   let remoteUrl: string | undefined = undefined;
 
-  // 1. Attempt Supabase Storage upload if online & signed in
+  // 2. Attempt Supabase Storage upload if online & signed in
   if (isSupabaseConfigured() && getCurrentUserId()) {
     const supabase = getSupabase();
     if (supabase) {
       try {
         const { error: uploadErr } = await supabase.storage
           .from('documents')
-          .upload(storagePath, file, {
+          .upload(storagePath, cleanBlob, {
             cacheControl: '3600',
             upsert: true,
           });
@@ -218,29 +252,14 @@ export async function uploadDocument(
     }
   }
 
-  onProgress?.(55);
+  onProgress?.(65);
 
-  // 2. Stream and save full binary blob to CacheStorage (works flawlessly for any file size)
-  try {
-    await saveDocumentBlobToCache(docId, file);
-  } catch (cacheErr) {
-    console.warn('CacheStorage save notice:', cacheErr);
-  }
+  // 3. Save to native device disk if running on native Android/iOS
+  void saveToNativeFs(docId, cleanBlob);
 
-  onProgress?.(75);
+  onProgress?.(80);
 
-  // 3. Save lightweight metadata to IndexedDB
-  // For files <= 500KB, optionally preserve blob in IDB; for large files, IDB only holds metadata
-  let blobForIdb: Blob | undefined = undefined;
-  if (file.size <= 500 * 1024) {
-    try {
-      const buffer = await file.arrayBuffer();
-      blobForIdb = new Blob([buffer], { type: file.type || 'application/octet-stream' });
-    } catch {
-      blobForIdb = undefined;
-    }
-  }
-
+  // 4. Save to IndexedDB (with cleanBlob and 2.5s non-blocking fallback)
   const storedDoc: StoredDocument = {
     id: docId,
     userId,
@@ -250,13 +269,12 @@ export async function uploadDocument(
     category,
     createdAt: now,
     updatedAt: now,
-    blob: blobForIdb,
+    blob: cleanBlob,
     storagePath,
     remoteUrl,
   };
 
   try {
-    // Non-blocking IndexedDB metadata save with 2.5-second timeout
     await Promise.race([
       dbSaveDocument(storedDoc),
       new Promise((_, reject) =>
@@ -264,11 +282,9 @@ export async function uploadDocument(
       ),
     ]);
   } catch (idbErr) {
-    console.warn('IndexedDB save warning (file is safely cached in CacheStorage):', idbErr);
-    if (blobForIdb) {
-      storedDoc.blob = undefined;
-      await dbSaveDocument(storedDoc).catch(() => {});
-    }
+    console.warn('IndexedDB blob save notice (retained in memory & native disk):', idbErr);
+    storedDoc.blob = undefined;
+    await dbSaveDocument(storedDoc).catch(() => {});
   }
 
   onProgress?.(95);
@@ -354,7 +370,7 @@ export async function listDocuments(): Promise<DocumentItem[]> {
       updatedAt: d.updatedAt,
       remoteUrl: d.remoteUrl,
       storagePath: d.storagePath,
-      hasLocalBlob: !!d.blob,
+      hasLocalBlob: memoryBlobCache.has(d.id) || !!d.blob,
     }));
 }
 
@@ -362,21 +378,29 @@ export async function listDocuments(): Promise<DocumentItem[]> {
  * Get a downloadable or previewable URL for a document.
  */
 export async function getDocumentUrl(doc: DocumentItem): Promise<string> {
-  // 1. First check CacheStorage (handles large documents seamlessly)
-  const cachedBlob = await getDocumentBlobFromCache(doc.id);
-  if (cachedBlob && cachedBlob.size > 0) {
-    return URL.createObjectURL(cachedBlob);
+  // 1. First check in-memory cache
+  if (memoryBlobCache.has(doc.id)) {
+    const mem = memoryBlobCache.get(doc.id)!;
+    if (mem && mem.size > 0) return URL.createObjectURL(mem);
   }
 
-  // 2. Next check local IndexedDB blob
+  // 2. Next check native Android filesystem
+  const fromNative = await readFromNativeFs(doc.id, doc.mimeType);
+  if (fromNative && fromNative.size > 0) {
+    memoryBlobCache.set(doc.id, fromNative);
+    return URL.createObjectURL(fromNative);
+  }
+
+  // 3. Next check local IndexedDB blob
   try {
     const local = await dbGetDocumentById(doc.id);
     if (local?.blob && local.blob.size > 0) {
+      memoryBlobCache.set(doc.id, local.blob);
       return URL.createObjectURL(local.blob);
     }
   } catch {}
 
-  // 3. If remote storage exists, generate a fresh signed URL
+  // 4. If remote storage exists, generate a fresh signed URL
   if (doc.storagePath && isSupabaseConfigured()) {
     const supabase = getSupabase();
     if (supabase) {
@@ -409,31 +433,41 @@ export async function downloadDocument(doc: DocumentItem): Promise<void> {
 }
 
 /**
- * Retrieve the raw Blob for a document (from CacheStorage, IndexedDB, or cloud).
+ * Retrieve the raw Blob for a document (from memory, native FS, IndexedDB, or cloud).
  */
 export async function getDocumentBlob(doc: DocumentItem): Promise<Blob> {
-  // 1. Try CacheStorage first
-  const fromCache = await getDocumentBlobFromCache(doc.id);
-  if (fromCache && fromCache.size > 0) {
-    return fromCache;
+  // 1. In-memory cache (0ms instant access)
+  if (memoryBlobCache.has(doc.id)) {
+    const mem = memoryBlobCache.get(doc.id)!;
+    if (mem && mem.size > 0) return mem;
   }
 
-  // 2. Try IndexedDB
+  // 2. Native Android / iOS Filesystem
+  const fromNative = await readFromNativeFs(doc.id, doc.mimeType);
+  if (fromNative && fromNative.size > 0) {
+    memoryBlobCache.set(doc.id, fromNative);
+    return fromNative;
+  }
+
+  // 3. Local IndexedDB
   try {
     const local = await dbGetDocumentById(doc.id);
     if (local?.blob && local.blob.size > 0) {
-      void saveDocumentBlobToCache(doc.id, local.blob);
+      memoryBlobCache.set(doc.id, local.blob);
       return local.blob;
     }
-  } catch {}
+  } catch (err) {
+    console.warn('IndexedDB document fetch notice:', err);
+  }
 
-  // 3. Fallback: Download from cloud URL
+  // 4. Remote Cloud URL fallback
   const url = await getDocumentUrl(doc);
   const resp = await fetch(url);
   const blob = await resp.blob();
 
-  // Cache locally in CacheStorage for future instant offline access
-  void saveDocumentBlobToCache(doc.id, blob);
+  // Cache in memory and native disk
+  memoryBlobCache.set(doc.id, blob);
+  void saveToNativeFs(doc.id, blob);
 
   return blob;
 }
@@ -660,13 +694,14 @@ export async function updateDocumentTextContent(
 
   const blob = new Blob([newText], { type: local.mimeType || 'text/plain' });
   const now = Date.now();
-  local.blob = blob.size <= 500 * 1024 ? blob : undefined;
+  local.blob = blob;
   local.fileSize = blob.size;
   local.updatedAt = now;
   if (newCategory) local.category = newCategory;
 
-  // Persist updated blob to CacheStorage
-  await saveDocumentBlobToCache(docId, blob);
+  // Persist updated blob to memory and native filesystem
+  memoryBlobCache.set(docId, blob);
+  void saveToNativeFs(docId, blob);
 
   await dbSaveDocument(local);
 
@@ -743,15 +778,16 @@ export async function renameDocument(id: string, newName: string): Promise<void>
  * Delete a document from IndexedDB, CacheStorage, and cloud storage safely.
  */
 export async function deleteDocument(doc: DocumentItem): Promise<void> {
-  // Always delete locally first (both IndexedDB and CacheStorage)
+  // 1. Delete from memory cache and native filesystem
+  memoryBlobCache.delete(doc.id);
+  void deleteFromNativeFs(doc.id);
+
+  // 2. Delete from IndexedDB
   try {
     await dbDeleteDocument(doc.id);
   } catch (err) {
     console.warn('Local document delete notice:', err);
   }
-  try {
-    await deleteDocumentBlobFromCache(doc.id);
-  } catch {}
 
   // Attempt cloud delete if connected
   if (isSupabaseConfigured() && getCurrentUserId()) {

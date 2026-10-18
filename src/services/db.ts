@@ -176,9 +176,11 @@ export async function dbGetDocuments(userId: string): Promise<StoredDocument[]> 
     const req = index.getAll(userId);
     req.onsuccess = () => {
       const docs = req.result as StoredDocument[];
-      // Sort newest first
-      docs.sort((a, b) => b.createdAt - a.createdAt);
-      resolve(docs);
+      // Strip blobs from bulk list query for instant UI render and minimal RAM usage.
+      // Blobs are loaded on demand via dbGetDocumentById when opening preview.
+      const lightDocs = docs.map((d) => ({ ...d, blob: undefined }));
+      lightDocs.sort((a, b) => b.createdAt - a.createdAt);
+      resolve(lightDocs);
     };
     req.onerror = () => reject(req.error);
   });
