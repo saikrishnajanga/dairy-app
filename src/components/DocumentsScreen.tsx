@@ -12,6 +12,8 @@ import {
   getDocumentBlob,
   updateDocumentTextContent,
   createTextDocument,
+  createWordDocFile,
+  createPdfDocFile,
   DOCUMENT_CATEGORIES,
   ALLOWED_EXTENSIONS,
   type DocumentItem,
@@ -121,8 +123,9 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
   const [editedText, setEditedText] = useState('');
   const [isSavingDoc, setIsSavingDoc] = useState(false);
 
-  // Create New Document Modal
+  // Create New Document Modal (Word .docx, PDF .pdf, Text .txt with unlimited lines)
   const [showNewDocModal, setShowNewDocModal] = useState(false);
+  const [newDocFormat, setNewDocFormat] = useState<'docx' | 'pdf' | 'txt'>('docx');
   const [newDocName, setNewDocName] = useState('');
   const [newDocContent, setNewDocContent] = useState('');
   const [newDocCategory, setNewDocCategory] = useState<DocumentCategory>('Personal');
@@ -396,21 +399,34 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
     }
   };
 
-  // Create Brand New Text Document
+  // Create Brand New Document (Word .docx, PDF .pdf, or Text .txt with unlimited lines)
   const handleCreateNewDoc = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDocName.trim()) return;
     hapticTap();
     setIsCreatingDoc(true);
     try {
-      const created = await createTextDocument(newDocName, newDocContent, newDocCategory);
-      showToast(`Created document "${created.name}"`);
+      let file: File;
+      const baseTitle = newDocName.trim();
+
+      if (newDocFormat === 'docx') {
+        file = createWordDocFile(baseTitle, newDocContent);
+      } else if (newDocFormat === 'pdf') {
+        file = createPdfDocFile(baseTitle, newDocContent);
+      } else {
+        const safeName = baseTitle.endsWith('.txt') ? baseTitle : `${baseTitle}.txt`;
+        file = new File([newDocContent], safeName, { type: 'text/plain' });
+      }
+
+      const created = await uploadDocument(file, newDocCategory);
+      showToast(`Created ${newDocFormat.toUpperCase()} "${created.name}"`);
       setShowNewDocModal(false);
       setNewDocName('');
       setNewDocContent('');
       await loadDocs();
       handleOpenPreview(created);
     } catch (err: any) {
+      console.warn('Could not create document:', err);
       showToast('Failed to create document: ' + (err?.message || err));
     } finally {
       setIsCreatingDoc(false);
@@ -482,11 +498,14 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
           <button
             type="button"
             className="vault-new-note-btn"
-            onClick={() => setShowNewDocModal(true)}
-            title="Create a new text note in vault"
+            onClick={() => {
+              setNewDocFormat('docx');
+              setShowNewDocModal(true);
+            }}
+            title="Create a new Word (.docx), PDF (.pdf), or text document"
           >
             <PlusIcon size={16} />
-            <span>New Note</span>
+            <span>Create Doc</span>
           </button>
           <button
             type="button"
@@ -587,10 +606,13 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
             <button
               type="button"
               className="vault-new-note-btn"
-              onClick={() => setShowNewDocModal(true)}
+              onClick={() => {
+                setNewDocFormat('docx');
+                setShowNewDocModal(true);
+              }}
             >
               <PlusIcon size={16} />
-              <span>Create Note</span>
+              <span>Create Document</span>
             </button>
           </div>
         </div>
@@ -1056,61 +1078,231 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
         </div>
       )}
 
-      {/* ─── CREATE NEW TEXT DOCUMENT MODAL ─── */}
+      {/* ─── CREATE NEW DOCUMENT MODAL (Word .docx, PDF .pdf, Text .txt with UNLIMITED LINES) ─── */}
       {showNewDocModal && (
         <div className="pin-overlay" onClick={() => setShowNewDocModal(false)}>
-          <div className="pin-modal new-doc-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="confirm-title">📄 Create New Text Note</h3>
-            <p className="documents-subtitle" style={{ margin: '6px 0 16px' }}>
-              Create an editable document directly in your vault.
-            </p>
-            <form onSubmit={handleCreateNewDoc}>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
-                  Document Name
+          <div
+            className="pin-modal new-doc-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '640px', width: '94%', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '24px' }}>
+                  {newDocFormat === 'docx' ? '📘' : newDocFormat === 'pdf' ? '📕' : '📄'}
+                </span>
+                <div>
+                  <h3 className="confirm-title" style={{ margin: 0, fontSize: '18px' }}>
+                    Create {newDocFormat === 'docx' ? 'Word Document' : newDocFormat === 'pdf' ? 'PDF Document' : 'Text Note'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Unlimited lines writing canvas • Instant auto-formatted export
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="doc-close-btn"
+                onClick={() => setShowNewDocModal(false)}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewDoc} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              {/* Format Switcher Pills */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Choose Document Format
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Project Idea.txt"
-                  className="date-picker-input text-input"
-                  value={newDocName}
-                  onChange={(e) => setNewDocName(e.target.value)}
-                  autoFocus
-                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDocFormat('docx');
+                      if (newDocName.endsWith('.pdf') || newDocName.endsWith('.txt')) {
+                        setNewDocName(newDocName.replace(/\.(pdf|txt)$/, '.docx'));
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '10px 8px',
+                      borderRadius: '8px',
+                      border: newDocFormat === 'docx' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                      background: newDocFormat === 'docx' ? 'var(--primary-soft)' : 'var(--surface-inset)',
+                      color: newDocFormat === 'docx' ? 'var(--primary-text)' : 'var(--text)',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      fontSize: '12.5px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span style={{ fontSize: '20px' }}>📘</span>
+                    <span>Word (.docx)</span>
+                    <span style={{ fontSize: '10px', opacity: 0.75, fontWeight: 400 }}>Microsoft Word / Google Docs</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDocFormat('pdf');
+                      if (newDocName.endsWith('.docx') || newDocName.endsWith('.txt')) {
+                        setNewDocName(newDocName.replace(/\.(docx|txt)$/, '.pdf'));
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '10px 8px',
+                      borderRadius: '8px',
+                      border: newDocFormat === 'pdf' ? '2px solid #ef4444' : '1px solid var(--border)',
+                      background: newDocFormat === 'pdf' ? 'rgba(239, 68, 68, 0.12)' : 'var(--surface-inset)',
+                      color: newDocFormat === 'pdf' ? '#ef4444' : 'var(--text)',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      fontSize: '12.5px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span style={{ fontSize: '20px' }}>📕</span>
+                    <span>PDF Document</span>
+                    <span style={{ fontSize: '10px', opacity: 0.75, fontWeight: 400 }}>Auto-paginated multi-page</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDocFormat('txt');
+                      if (newDocName.endsWith('.docx') || newDocName.endsWith('.pdf')) {
+                        setNewDocName(newDocName.replace(/\.(docx|pdf)$/, '.txt'));
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '10px 8px',
+                      borderRadius: '8px',
+                      border: newDocFormat === 'txt' ? '2px solid #10b981' : '1px solid var(--border)',
+                      background: newDocFormat === 'txt' ? 'rgba(16, 185, 129, 0.12)' : 'var(--surface-inset)',
+                      color: newDocFormat === 'txt' ? '#10b981' : 'var(--text)',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      fontSize: '12.5px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span style={{ fontSize: '20px' }}>📄</span>
+                    <span>Text Note (.txt)</span>
+                    <span style={{ fontSize: '10px', opacity: 0.75, fontWeight: 400 }}>Fast plain text</span>
+                  </button>
+                </div>
               </div>
 
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
-                  Category
-                </label>
-                <select
-                  className="date-picker-input text-input"
-                  value={newDocCategory}
-                  onChange={(e) => setNewDocCategory(e.target.value as DocumentCategory)}
-                >
-                  {DOCUMENT_CATEGORIES.filter((c) => c !== 'All').map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+              {/* Title & Category Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '10px', marginBottom: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, marginBottom: 4 }}>
+                    Document Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={
+                      newDocFormat === 'docx'
+                        ? 'e.g. Project Plan.docx'
+                        : newDocFormat === 'pdf'
+                        ? 'e.g. Personal Diary 2026.pdf'
+                        : 'e.g. Quick Note.txt'
+                    }
+                    className="date-picker-input text-input"
+                    value={newDocName}
+                    onChange={(e) => setNewDocName(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, marginBottom: 4 }}>
+                    Category
+                  </label>
+                  <select
+                    className="date-picker-input text-input"
+                    value={newDocCategory}
+                    onChange={(e) => setNewDocCategory(e.target.value as DocumentCategory)}
+                  >
+                    {DOCUMENT_CATEGORIES.filter((c) => c !== 'All').map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div style={{ marginBottom: 18 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
-                  Content
-                </label>
+              {/* Live Writing Statistics & Unlimited Line Info */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 12px',
+                background: 'var(--surface-raised)',
+                border: '1px solid var(--border)',
+                borderRadius: '6px 6px 0 0',
+                fontSize: '11.5px',
+                color: 'var(--text-secondary)',
+                fontWeight: 600,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span>✍️ <strong>Lines:</strong> {newDocContent ? newDocContent.split('\n').length : 0} (Unlimited)</span>
+                  <span>•</span>
+                  <span><strong>Words:</strong> {newDocContent.trim() ? newDocContent.trim().split(/\s+/).length : 0}</span>
+                  <span>•</span>
+                  <span><strong>Chars:</strong> {newDocContent.length}</span>
+                </div>
+                <span style={{ color: 'var(--primary)', fontSize: '11px' }}>
+                  {newDocFormat === 'docx' ? '📘 Real Word (.docx)' : newDocFormat === 'pdf' ? '📕 Auto-paginated PDF' : '📄 Plain Text'}
+                </span>
+              </div>
+
+              {/* Unlimited Lines Editor Textarea */}
+              <div style={{ flex: 1, minHeight: '220px', display: 'flex', flexDirection: 'column', marginBottom: 14 }}>
                 <textarea
                   className="date-picker-input text-input"
-                  style={{ minHeight: 140, resize: 'vertical', fontFamily: 'inherit' }}
-                  placeholder="Write note contents here…"
+                  style={{
+                    flex: 1,
+                    minHeight: '220px',
+                    maxHeight: '45vh',
+                    borderRadius: '0 0 8px 8px',
+                    borderTop: 'none',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    lineHeight: '1.65',
+                    fontSize: '14px',
+                    padding: '12px 14px',
+                    overflowY: 'auto',
+                  }}
+                  placeholder={
+                    newDocFormat === 'docx'
+                      ? 'Start typing your Word document here… Write unlimited lines without restrictions! Each paragraph will be formatted automatically.'
+                      : newDocFormat === 'pdf'
+                      ? 'Start typing your PDF document here… Write as many lines as you wish! Pages and margins will be created automatically upon export.'
+                      : 'Write your note contents here with unlimited lines…'
+                  }
                   value={newDocContent}
                   onChange={(e) => setNewDocContent(e.target.value)}
                 />
               </div>
 
-              <div className="pin-actions">
+              {/* Actions Footer */}
+              <div className="pin-actions" style={{ marginTop: 'auto', paddingTop: '8px' }}>
                 <button
                   type="button"
                   className="action-btn"
@@ -1122,8 +1314,17 @@ export default function DocumentsScreen({ showToast, onOpenEditor }: Props) {
                   type="submit"
                   className="action-btn primary"
                   disabled={isCreatingDoc || !newDocName.trim()}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  {isCreatingDoc ? 'Creating…' : 'Create & Open'}
+                  <span>
+                    {isCreatingDoc
+                      ? 'Generating…'
+                      : newDocFormat === 'docx'
+                      ? '📘 Create Word Document'
+                      : newDocFormat === 'pdf'
+                      ? '📕 Create PDF Document'
+                      : '📄 Create Note'}
+                  </span>
                 </button>
               </div>
             </form>

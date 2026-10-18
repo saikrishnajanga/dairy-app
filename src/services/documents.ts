@@ -20,6 +20,8 @@ import { genId } from './utils';
 import { addNotification } from './notifications';
 import { saveOrShareFile } from './docExport';
 import JSZip from 'jszip';
+import { jsPDF } from 'jspdf';
+import { buildDocx, type DocBlock } from './docx';
 
 export const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB limit
 export const ALLOWED_EXTENSIONS = [
@@ -749,6 +751,103 @@ export async function createTextDocument(
   const safeName = name.trim().endsWith('.txt') ? name.trim() : `${name.trim() || 'Untitled Document'}.txt`;
   const file = new File([content], safeName, { type: 'text/plain' });
   return await uploadDocument(file, category);
+}
+
+/**
+ * Generate a real Microsoft Word .docx File object from a title and text.
+ * Supports unlimited lines/paragraphs.
+ */
+export function createWordDocFile(title: string, content: string): File {
+  const safeTitle = title.replace(/\.[^/.]+$/, '').trim() || 'Untitled Document';
+  const paragraphs = content.split('\n');
+  const blocks: DocBlock[] = [];
+
+  // Document Heading / Title
+  blocks.push({
+    type: 'title',
+    runs: [{ text: safeTitle, bold: true }],
+  });
+
+  // Paragraphs (unlimited lines support)
+  for (const para of paragraphs) {
+    if (para.trim()) {
+      blocks.push({
+        type: 'paragraph',
+        runs: [{ text: para }],
+      });
+    }
+  }
+
+  const docxBytes = buildDocx(blocks, { title: safeTitle });
+  return new File([docxBytes], `${safeTitle}.docx`, {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+}
+
+/**
+ * Generate a real PDF File object from a title and text.
+ * Automatically wraps lines and adds pages for unlimited writing length.
+ */
+export function createPdfDocFile(title: string, content: string): File {
+  const safeTitle = title.replace(/\.[^/.]+$/, '').trim() || 'Untitled Document';
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 40;
+  const maxLineWidth = pageWidth - margin * 2;
+  let cursorY = margin + 25;
+
+  // Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(30, 30, 30);
+  const titleLines = doc.splitTextToSize(safeTitle, maxLineWidth);
+  doc.text(titleLines, margin, cursorY);
+  cursorY += titleLines.length * 22 + 15;
+
+  // Horizontal divider rule
+  doc.setDrawColor(210, 210, 210);
+  doc.setLineWidth(1);
+  doc.line(margin, cursorY, pageWidth - margin, cursorY);
+  cursorY += 18;
+
+  // Content lines (unlimited lines support with automatic pagination)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(12);
+  doc.setTextColor(50, 50, 50);
+
+  const paragraphs = content.split('\n');
+  for (const para of paragraphs) {
+    if (!para.trim()) {
+      cursorY += 14;
+      if (cursorY > pageHeight - margin) {
+        doc.addPage();
+        cursorY = margin + 25;
+      }
+      continue;
+    }
+
+    const lines = doc.splitTextToSize(para, maxLineWidth);
+    for (const line of lines) {
+      if (cursorY > pageHeight - margin) {
+        doc.addPage();
+        cursorY = margin + 25;
+      }
+      doc.text(line, margin, cursorY);
+      cursorY += 18;
+    }
+    cursorY += 8; // paragraph spacing
+  }
+
+  const arrayBuffer = doc.output('arraybuffer');
+  return new File([new Uint8Array(arrayBuffer)], `${safeTitle}.pdf`, {
+    type: 'application/pdf',
+  });
 }
 
 /**
