@@ -79,6 +79,21 @@ export default function App() {
   const [activeEditorEntry, setActiveEditorEntry] = useState<TextDiaryEntry | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  // Desktop Navigation Tools Dropdown
+  const [showDesktopToolsDropdown, setShowDesktopToolsDropdown] = useState(false);
+  const toolsDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showDesktopToolsDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(e.target as Node)) {
+        setShowDesktopToolsDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDesktopToolsDropdown]);
+
   // Notifications
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
@@ -429,16 +444,6 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={`desktop-nav-link ${tab === 'locked' ? 'active' : ''}`}
-              onClick={() => {
-                hapticTap();
-                setTab('locked');
-              }}
-            >
-              <span className="nav-icon">🔒</span> Locked Vault
-            </button>
-            <button
-              type="button"
               className={`desktop-nav-link ${tab === 'documents' ? 'active' : ''}`}
               onClick={() => {
                 hapticTap();
@@ -449,45 +454,131 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={`desktop-nav-link ${tab === 'whatsapp' ? 'active' : ''}`}
+              className={`desktop-nav-link ${tab === 'locked' ? 'active' : ''}`}
               onClick={() => {
                 hapticTap();
-                setTab('whatsapp');
+                setTab('locked');
               }}
             >
-              <span className="nav-icon">💬</span> WhatsApp
+              <span className="nav-icon">🔒</span> Vault
             </button>
-            <button
-              type="button"
-              className={`desktop-nav-link ${tab === 'telugu_converter' ? 'active' : ''}`}
-              onClick={() => {
-                hapticTap();
-                setTab('telugu_converter');
-              }}
-            >
-              <span className="nav-icon">🔄</span> Telugu Words
-            </button>
-            <button
-              type="button"
-              className={`desktop-nav-link ${tab === 'translate' ? 'active' : ''}`}
-              onClick={() => {
-                hapticTap();
-                setTab('translate');
-              }}
-            >
-              <span className="nav-icon">🌐</span> Translator
-            </button>
-            <button
-              type="button"
-              className={`desktop-nav-link ${tab === 'trash' ? 'active' : ''}`}
-              onClick={() => {
-                hapticTap();
-                setTab('trash');
-              }}
-            >
-              <span className="nav-icon" style={{ display: 'inline-flex', alignItems: 'center' }}><TrashIcon size={15} /></span> Bin
-              {getTrashCount() > 0 && <span className="nav-badge" style={{ background: 'var(--danger)', color: '#fff' }}>{getTrashCount()}</span>}
-            </button>
+
+            {/* Compact More Tools Dropdown */}
+            <div className="desktop-tools-wrapper" ref={toolsDropdownRef}>
+              {(() => {
+                const isToolActive =
+                  tab === 'whatsapp' ||
+                  tab === 'telugu_converter' ||
+                  tab === 'translate' ||
+                  tab === 'trash';
+                const label =
+                  tab === 'whatsapp'
+                    ? '💬 WhatsApp'
+                    : tab === 'telugu_converter'
+                    ? '🔄 Telugu'
+                    : tab === 'translate'
+                    ? '🌐 Translate'
+                    : tab === 'trash'
+                    ? '🗑️ Bin'
+                    : '⚡ More Tools';
+                return (
+                  <>
+                    <button
+                      type="button"
+                      className={`desktop-nav-link desktop-tools-trigger ${isToolActive ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticTap();
+                        setShowDesktopToolsDropdown((prev) => !prev);
+                      }}
+                      title="More tools: WhatsApp, Telugu converter, Translator, Recycle Bin"
+                    >
+                      <span>{label}</span>
+                      <span className="dropdown-caret" style={{ fontSize: 10, opacity: 0.7 }}>
+                        {showDesktopToolsDropdown ? '▴' : '▾'}
+                      </span>
+                      {getTrashCount() > 0 && !isToolActive && (
+                        <span className="nav-badge" style={{ background: 'var(--danger)', color: '#fff' }}>
+                          {getTrashCount()}
+                        </span>
+                      )}
+                    </button>
+
+                    {showDesktopToolsDropdown && (
+                      <div className="desktop-tools-popover">
+                        <div className="desktop-tools-popover-header">Companion Tools</div>
+                        <button
+                          type="button"
+                          className={`desktop-tool-item ${tab === 'whatsapp' ? 'active' : ''}`}
+                          onClick={() => {
+                            hapticTap();
+                            setTab('whatsapp');
+                            setShowDesktopToolsDropdown(false);
+                          }}
+                        >
+                          <span className="tool-item-left">
+                            <span className="tool-item-icon">💬</span>
+                            <span className="tool-item-name">WhatsApp Enhancer</span>
+                          </span>
+                          <span className="tool-item-desc">Clean chats & audio</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`desktop-tool-item ${tab === 'telugu_converter' ? 'active' : ''}`}
+                          onClick={() => {
+                            hapticTap();
+                            setTab('telugu_converter');
+                            setShowDesktopToolsDropdown(false);
+                          }}
+                        >
+                          <span className="tool-item-left">
+                            <span className="tool-item-icon">🔄</span>
+                            <span className="tool-item-name">Telugu Words</span>
+                          </span>
+                          <span className="tool-item-desc">Phonetic English script</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`desktop-tool-item ${tab === 'translate' ? 'active' : ''}`}
+                          onClick={() => {
+                            hapticTap();
+                            setTab('translate');
+                            setShowDesktopToolsDropdown(false);
+                          }}
+                        >
+                          <span className="tool-item-left">
+                            <span className="tool-item-icon">🌐</span>
+                            <span className="tool-item-name">Translator</span>
+                          </span>
+                          <span className="tool-item-desc">English ↔ Telugu</span>
+                        </button>
+                        <div className="desktop-tool-divider" />
+                        <button
+                          type="button"
+                          className={`desktop-tool-item ${tab === 'trash' ? 'active' : ''}`}
+                          onClick={() => {
+                            hapticTap();
+                            setTab('trash');
+                            setShowDesktopToolsDropdown(false);
+                          }}
+                        >
+                          <span className="tool-item-left">
+                            <span className="tool-item-icon">
+                              <TrashIcon size={14} />
+                            </span>
+                            <span className="tool-item-name">Recycle Bin</span>
+                          </span>
+                          {getTrashCount() > 0 && (
+                            <span className="nav-badge" style={{ background: 'var(--danger)', color: '#fff' }}>
+                              {getTrashCount()}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </nav>
 
           <div className="header-actions">

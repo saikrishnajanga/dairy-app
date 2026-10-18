@@ -172,21 +172,45 @@ export async function uploadDocument(
   onProgress?.(70);
 
   // Always save in IndexedDB for reliable offline access & instant preview
+  let cleanBlob: Blob = file;
+  try {
+    const buffer = await file.arrayBuffer();
+    cleanBlob = new Blob([buffer], { type: file.type || 'application/octet-stream' });
+  } catch (bufErr) {
+    console.warn('Could not read ArrayBuffer, using original file:', bufErr);
+    cleanBlob = file;
+  }
+
   const storedDoc: StoredDocument = {
     id: docId,
     userId,
     name: file.name,
     fileSize: file.size,
-    mimeType: file.type,
+    mimeType: file.type || 'application/octet-stream',
     category,
     createdAt: now,
     updatedAt: now,
-    blob: file,
+    blob: cleanBlob,
     storagePath,
     remoteUrl,
   };
 
-  await dbSaveDocument(storedDoc);
+  try {
+    // Timeout protection: if IndexedDB hangs or is blocked, fallback to metadata-only save
+    await Promise.race([
+      dbSaveDocument(storedDoc),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Local IndexedDB storage timeout')), 4000)
+      ),
+    ]);
+  } catch (idbErr) {
+    console.warn('IndexedDB save with blob failed or timed out, saving metadata fallback:', idbErr);
+    const fallbackDoc: StoredDocument = { ...storedDoc, blob: undefined };
+    await dbSaveDocument(fallbackDoc).catch((e) =>
+      console.warn('Metadata fallback save failed:', e)
+    );
+  }
+
   onProgress?.(100);
 
   // Emit event notification
@@ -201,7 +225,7 @@ export async function uploadDocument(
     userId,
     name: file.name,
     fileSize: file.size,
-    mimeType: file.type,
+    mimeType: file.type || 'application/octet-stream',
     category,
     createdAt: now,
     updatedAt: now,

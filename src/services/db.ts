@@ -97,10 +97,45 @@ function openDB(): Promise<IDBDatabase> {
 export async function dbSaveDocument(doc: StoredDocument): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('documents', 'readwrite');
-    tx.objectStore('documents').put(doc);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    try {
+      const tx = db.transaction('documents', 'readwrite');
+      const store = tx.objectStore('documents');
+      const req = store.put(doc);
+      let settled = false;
+
+      req.onsuccess = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      req.onerror = () => {
+        if (!settled) {
+          settled = true;
+          reject(req.error || new Error('Put document failed'));
+        }
+      };
+      tx.oncomplete = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      tx.onerror = () => {
+        if (!settled) {
+          settled = true;
+          reject(tx.error || new Error('Transaction failed'));
+        }
+      };
+      tx.onabort = () => {
+        if (!settled) {
+          settled = true;
+          reject(tx.error || new Error('Transaction aborted'));
+        }
+      };
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 

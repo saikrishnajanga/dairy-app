@@ -491,6 +491,102 @@ body {
   border-radius: var(--radius-full);
 }
 
+/* Desktop Tools Dropdown Popover */
+.desktop-tools-wrapper {
+  position: relative;
+}
+
+.desktop-tools-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.desktop-tools-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 8px;
+  min-width: 270px;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  z-index: 1050;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.desktop-tools-popover-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 6px 10px 4px;
+}
+
+.desktop-tool-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  width: 100%;
+}
+
+.desktop-tool-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+.desktop-tool-item.active {
+  background: var(--surface-raised);
+  border-color: var(--primary);
+  color: var(--primary-text);
+  font-weight: 700;
+}
+
+.tool-item-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-item-icon {
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}
+
+.tool-item-name {
+  font-weight: 600;
+}
+
+.tool-item-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.desktop-tool-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}
+
 /* Header Actions */
 .header-actions {
   display: flex;
