@@ -256,7 +256,7 @@
   flex-direction: column;
   gap: 6px;
   min-width: 170px;
-  z-index: 100;
+  z-index: 1050;
   animation: fadeIn 0.15s ease-out;
 }
 
@@ -316,12 +316,11 @@ html, body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  overflow-x: clip;
   text-rendering: optimizeLegibility;
 }
 
 body {
-  padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -382,16 +381,20 @@ body {
 .app-header {
   position: sticky;
   top: 0;
-  z-index: 90;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: max(12px, env(safe-area-inset-top, 12px)) 24px 12px;
-  background: var(--surface-overlay);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   transition: all var(--transition-base);
+}
+
+[data-theme="light"] .app-header {
+  background: var(--surface);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .app-brand {
@@ -3449,7 +3452,7 @@ button:disabled {
     display: flex;
   }
   .app-header {
-    padding: 10px 16px;
+    padding: max(10px, env(safe-area-inset-top, 10px)) 16px 10px;
   }
   .main-content {
     padding: 18px 14px 96px;
@@ -7414,15 +7417,29 @@ button:disabled {
 /* ─── 11. Responsive Layout Optimizations ───────────────────────────────── */
 @media (max-width: 768px) {
   .app-header {
-    padding: 10px 14px;
+    padding: max(10px, env(safe-area-inset-top, 10px)) 14px 10px;
   }
 
   .desktop-nav {
     display: none !important;
   }
 
+  .app-subtitle {
+    display: none;
+  }
+
   .header-actions {
     gap: 6px;
+    align-items: center;
+  }
+
+  .signin-header-btn {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+
+  .header-new-note-btn {
+    display: none;
   }
 
   .profile-chip-name {
@@ -7430,7 +7447,7 @@ button:disabled {
   }
 
   .main-content {
-    padding: 14px 12px 85px;
+    padding: 16px 12px 85px;
   }
 
   .dashboard-hub-grid {
