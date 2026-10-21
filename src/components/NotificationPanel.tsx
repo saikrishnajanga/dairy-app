@@ -11,7 +11,7 @@ import {
 } from '../services/notifications';
 import type { AppNotification } from '../services/db';
 import { hapticTap } from '../services/utils';
-import { TrashIcon } from './Icons';
+import { TrashIcon, BackIcon } from './Icons';
 
 interface Props {
   isOpen: boolean;
@@ -35,7 +35,24 @@ export default function NotificationPanel({ isOpen, onClose, showToast }: Props)
     }
   }, [isOpen, loadNotifs]);
 
+  // Support closing via Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
+
+  const handleBack = () => {
+    hapticTap();
+    onClose();
+  };
 
   const handleMarkRead = async (id: string) => {
     hapticTap();
@@ -90,12 +107,30 @@ export default function NotificationPanel({ isOpen, onClose, showToast }: Props)
   };
 
   return (
-    <div className="pin-overlay" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="pin-overlay notif-overlay" onClick={handleBack} role="dialog" aria-modal="true" aria-label="Notifications Panel">
       <div className="notification-drawer" onClick={e => e.stopPropagation()}>
         <div className="notif-header">
           <div className="notif-header-title-row">
-            <h3>🔔 Notifications</h3>
-            <button type="button" className="notif-close-btn" onClick={onClose}>
+            <div className="notif-header-left">
+              <button
+                type="button"
+                className="notif-back-btn"
+                onClick={handleBack}
+                title="Go back"
+                aria-label="Go back"
+              >
+                <BackIcon size={16} />
+                <span>Back</span>
+              </button>
+              <h3 className="notif-title">🔔 Notifications</h3>
+            </div>
+            <button
+              type="button"
+              className="notif-close-btn"
+              onClick={handleBack}
+              title="Close notifications"
+              aria-label="Close notifications"
+            >
               ✕
             </button>
           </div>
@@ -134,6 +169,15 @@ export default function NotificationPanel({ isOpen, onClose, showToast }: Props)
               <p className="notif-empty-desc">
                 Important account, sync, and security updates will appear here.
               </p>
+              <button
+                type="button"
+                className="action-btn notif-empty-back-btn"
+                onClick={handleBack}
+                title="Return to notes"
+              >
+                <BackIcon size={15} />
+                <span>Back to Diary</span>
+              </button>
             </div>
           ) : (
             <div className="notif-list">

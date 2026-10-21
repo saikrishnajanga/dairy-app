@@ -554,6 +554,27 @@ export default function App() {
                         <div className="desktop-tool-divider" />
                         <button
                           type="button"
+                          className="desktop-tool-item"
+                          onClick={() => {
+                            hapticTap();
+                            setShowDesktopToolsDropdown(false);
+                            setShowNotificationPanel(true);
+                          }}
+                        >
+                          <span className="tool-item-left">
+                            <span className="tool-item-icon">🔔</span>
+                            <span className="tool-item-name">Notifications</span>
+                          </span>
+                          {unreadNotifCount > 0 ? (
+                            <span className="nav-badge" style={{ background: '#ef4444', color: '#fff' }}>
+                              {unreadNotifCount}
+                            </span>
+                          ) : (
+                            <span className="tool-item-desc">Alerts</span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
                           className={`desktop-tool-item ${tab === 'trash' ? 'active' : ''}`}
                           onClick={() => {
                             hapticTap();
@@ -984,6 +1005,7 @@ export default function App() {
               key={activeProfile?.id ?? 'no-profile'}
               showToast={toast.show}
               onNavigateToDiary={() => setTab('diary')}
+              onBack={() => setTab('home')}
             />
           )}
 
@@ -1236,6 +1258,31 @@ export default function App() {
                       )}
                     </div>
                     <div className="more-card-desc">Recover deleted notes, voice & files within 30 days</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className="more-menu-card"
+                  onClick={() => {
+                    hapticTap();
+                    setShowMoreMenu(false);
+                    setShowNotificationPanel(true);
+                  }}
+                >
+                  <div className="more-card-icon" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308' }}>
+                    🔔
+                  </div>
+                  <div className="more-card-text">
+                    <div className="more-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Notifications</span>
+                      {unreadNotifCount > 0 && (
+                        <span style={{ fontSize: 11, background: '#ef4444', color: '#fff', padding: '1px 7px', borderRadius: 9999, fontWeight: 700 }}>
+                          {unreadNotifCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="more-card-desc">Daily reminder settings & system alerts</div>
                   </div>
                 </button>
               </div>

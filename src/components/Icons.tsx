@@ -203,3 +203,46 @@ export const CloseIcon: React.FC<IconProps> = ({ size = 16, className, color, st
     <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
+
+/** Modern vector Maximize / Fullscreen icon */
+export const MaximizeIcon: React.FC<IconProps> = ({ size = 16, className, color, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color || 'currentColor'}
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={style}
+  >
+    <polyline points="15 3 21 3 21 9" />
+    <polyline points="9 21 3 21 3 15" />
+    <line x1="21" y1="3" x2="14" y2="10" />
+    <line x1="3" y1="21" x2="10" y2="14" />
+  </svg>
+);
+
+/** Modern vector Minimize / Exit Fullscreen icon */
+export const MinimizeIcon: React.FC<IconProps> = ({ size = 16, className, color, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color || 'currentColor'}
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={style}
+  >
+    <polyline points="4 14 10 14 10 20" />
+    <polyline points="20 10 14 10 14 4" />
+    <line x1="14" y1="10" x2="21" y2="3" />
+    <line x1="3" y1="21" x2="10" y2="14" />
+  </svg>
+);
+
