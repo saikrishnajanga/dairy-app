@@ -34,7 +34,6 @@ export default function WhatsAppEnhancerScreen({
   const [fsFontSize, setFsFontSize] = useState<number>(18);
   const [fsLineHeight, setFsLineHeight] = useState<'normal' | 'relaxed'>('relaxed');
   const [fsTheme, setFsTheme] = useState<'default' | 'sepia' | 'dark' | 'focus'>('default');
-  const [isWideLayout, setIsWideLayout] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const enhanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -213,13 +212,13 @@ export default function WhatsAppEnhancerScreen({
   const readingTimeMins = outputResult ? Math.max(1, Math.ceil(outputResult.outputWordCount / 200)) : 1;
 
   return (
-    <div className={`tab-content wa-enhancer-screen ${isWideLayout ? 'is-wide-layout' : ''}`}>
-      {/* Top Navigation Row (Back Button) */}
-      {onBack && (
-        <div className="wa-top-nav-bar">
+    <div className="tab-content wa-enhancer-screen">
+      {/* Sleek, Compact Mobile-First Header */}
+      <div className="wa-top-header-row">
+        {onBack && (
           <button
             type="button"
-            className="action-btn back-btn wa-back-btn"
+            className="action-btn back-btn wa-header-back-btn"
             onClick={() => {
               hapticTap();
               onBack();
@@ -227,62 +226,24 @@ export default function WhatsAppEnhancerScreen({
             title="Back to Home"
           >
             <BackIcon size={16} />
-            <span>Back to Home</span>
+            <span>Back</span>
           </button>
+        )}
+        <div className="wa-header-titles">
+          <h2 className="wa-header-title">💬 WhatsApp Chat Cleaner</h2>
+          <span className="wa-header-subtitle">Strips timestamps, dates & senders into clean text</span>
         </div>
-      )}
-
-      {/* Hero Header */}
-      <div className="wa-hero-card">
-        <div className="wa-hero-left">
-          <div className="wa-badge">
-            <span className="wa-badge-dot" />
-            <span className="wa-icon">💬</span>
-            <span>WhatsApp Chat Cleaner</span>
-          </div>
-          <h2 className="wa-hero-title">Continuous Chat Extractor</h2>
-          <p className="wa-hero-subtitle">
-            Strips dates, timestamps, and sender names into clean, continuous readable text.
-          </p>
-        </div>
-
-        <div className="wa-hero-right-actions">
-          {/* Wide Screen Layout Toggle */}
-          <div className="wa-layout-mode-chips" title="Switch layout for bigger screens">
-            <button
-              type="button"
-              className={`wa-layout-chip ${!isWideLayout ? 'active' : ''}`}
-              onClick={() => {
-                hapticTap();
-                setIsWideLayout(false);
-              }}
-            >
-              ↕️ Stacked
-            </button>
-            <button
-              type="button"
-              className={`wa-layout-chip ${isWideLayout ? 'active' : ''}`}
-              onClick={() => {
-                hapticTap();
-                setIsWideLayout(true);
-              }}
-            >
-              ↔️ Wide
-            </button>
-          </div>
-
-          <button
-            type="button"
-            className="wa-help-btn"
-            onClick={() => {
-              hapticTap();
-              setShowGuide(g => !g);
-            }}
-            title="How to export chats from WhatsApp"
-          >
-            {showGuide ? '✕ Close Guide' : '❓ Export Guide'}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="wa-header-guide-btn"
+          onClick={() => {
+            hapticTap();
+            setShowGuide(g => !g);
+          }}
+          title="Export Guide"
+        >
+          {showGuide ? '✕ Close' : '❓ Guide'}
+        </button>
       </div>
 
       {/* Guide Banner (Collapsible) */}
@@ -296,7 +257,7 @@ export default function WhatsAppEnhancerScreen({
             </div>
             <div className="wa-guide-step">
               <span className="wa-step-num">2</span>
-              <span>Tap the top menu (⋮ on Android or contact name on iOS) &gt; <strong>More</strong> &gt; <strong>Export Chat</strong>.</span>
+              <span>Tap menu (⋮) or contact name &gt; <strong>More</strong> &gt; <strong>Export Chat</strong>.</span>
             </div>
             <div className="wa-guide-step">
               <span className="wa-step-num">3</span>
@@ -304,23 +265,22 @@ export default function WhatsAppEnhancerScreen({
             </div>
             <div className="wa-guide-step">
               <span className="wa-step-num">4</span>
-              <span>Copy the text file content or copy selected messages directly, and paste them below!</span>
+              <span>Copy text and paste it below!</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Workspace Grid (Stacked by default or Side-by-Side in Wide Layout) */}
-      <div className="wa-workspace-grid">
+      {/* Main Responsive Layout */}
+      <div className="wa-workspace-flow">
         {/* Input Section */}
         <div className="wa-card wa-input-card">
           <div className="wa-card-header">
             <div className="wa-card-header-left">
-              <span className="wa-section-indicator">1</span>
-              <span className="wa-card-title">Paste WhatsApp Content</span>
+              <span className="wa-card-title">📝 Paste WhatsApp Chat</span>
               {inputText.length > 0 && (
                 <span className="wa-count-tag">
-                  {inputText.length.toLocaleString()} chars • {inputText.split(/\r?\n/).filter(Boolean).length} lines
+                  {inputText.length.toLocaleString()} chars
                 </span>
               )}
             </div>
@@ -329,12 +289,12 @@ export default function WhatsAppEnhancerScreen({
               <button type="button" className="wa-btn-secondary" onClick={handlePaste} title="Paste from clipboard">
                 📋 Paste
               </button>
-              <button type="button" className="wa-btn-secondary" onClick={handleLoadSample} title="Load sample WhatsApp conversation">
-                💡 Sample Chat
+              <button type="button" className="wa-btn-secondary" onClick={handleLoadSample} title="Load sample chat">
+                💡 Sample
               </button>
               {inputText.length > 0 && (
                 <button type="button" className="wa-btn-ghost danger" onClick={handleClear} title="Clear text">
-                  <TrashIcon size={14} style={{ marginRight: 6 }} /> Clear
+                  <TrashIcon size={14} /> Clear
                 </button>
               )}
             </div>
@@ -344,80 +304,57 @@ export default function WhatsAppEnhancerScreen({
             <textarea
               ref={textareaRef}
               className="wa-textarea"
-              placeholder="Paste your WhatsApp chat export here... (Supports multiple paragraphs, long chats, group chats, Android, iOS & Web formats)
-
-Example:
-12/10/2026, 10:45 AM - John Doe: Hello, how are you?
-12/10/2026, 10:46 AM - Priya: Doing great! Let's connect today."
+              placeholder="Paste exported WhatsApp chat or copied messages here (Android, iOS & Web formats supported)…"
               value={inputText}
               onChange={e => setInputText(e.target.value)}
-              rows={5}
+              rows={4}
               aria-label="WhatsApp chat input"
             />
           </div>
 
-          {/* Enhancement Controls */}
-          <div className="wa-controls-row">
-            <div className="wa-mode-toggle-group">
+          {/* Options Row (Responsive pills) */}
+          <div className="wa-options-row">
+            <div className="wa-mode-pills">
               <button
                 type="button"
-                className={`wa-toggle-btn ${mode === 'single_paragraph' ? 'active' : ''}`}
-                onClick={() => {
-                  hapticTap();
-                  setMode('single_paragraph');
-                }}
-                title="Combine all messages into a single continuous text with each message separated by a space"
+                className={`wa-pill-btn ${mode === 'single_paragraph' ? 'active' : ''}`}
+                onClick={() => setMode('single_paragraph')}
               >
-                📄 Single Flow
+                Continuous Flow
               </button>
               <button
                 type="button"
-                className={`wa-toggle-btn ${mode === 'preserve_lines' ? 'active' : ''}`}
-                onClick={() => {
-                  hapticTap();
-                  setMode('preserve_lines');
-                }}
-                title="Separate each cleaned message onto a new line"
+                className={`wa-pill-btn ${mode === 'preserve_lines' ? 'active' : ''}`}
+                onClick={() => setMode('preserve_lines')}
               >
-                📑 Line by Line
+                Line by Line
               </button>
             </div>
 
-            <div className="wa-toggles-options">
-              <label className="wa-checkbox-label" title="Remove notices like <Media omitted>, encryption notices, and deleted messages">
+            <div className="wa-checkbox-chips">
+              <label className={`wa-chip-label ${removeSystem ? 'checked' : ''}`}>
                 <input
                   type="checkbox"
                   checked={removeSystem}
-                  onChange={e => {
-                    hapticTap();
-                    setRemoveSystem(e.target.checked);
-                  }}
+                  onChange={e => setRemoveSystem(e.target.checked)}
                 />
-                <span>Strip Notices</span>
+                <span>Clean Notices</span>
               </label>
-
-              <label className="wa-checkbox-label" title="Ensure each sentence ends with proper punctuation">
+              <label className={`wa-chip-label ${autoPunctuate ? 'checked' : ''}`}>
                 <input
                   type="checkbox"
                   checked={autoPunctuate}
-                  onChange={e => {
-                    hapticTap();
-                    setAutoPunctuate(e.target.checked);
-                  }}
+                  onChange={e => setAutoPunctuate(e.target.checked)}
                 />
-                <span>Auto-Punctuate (.)</span>
+                <span>Add (.)</span>
               </label>
-
-              <label className="wa-checkbox-label" title="Remove emojis from final text">
+              <label className={`wa-chip-label ${removeEmojis ? 'checked' : ''}`}>
                 <input
                   type="checkbox"
                   checked={removeEmojis}
-                  onChange={e => {
-                    hapticTap();
-                    setRemoveEmojis(e.target.checked);
-                  }}
+                  onChange={e => setRemoveEmojis(e.target.checked)}
                 />
-                <span>Strip Emojis</span>
+                <span>No Emojis</span>
               </label>
             </div>
           </div>
@@ -427,92 +364,65 @@ Example:
         <div className={`wa-card wa-output-card ${hasOutput ? 'has-content' : ''}`}>
           <div className="wa-card-header">
             <div className="wa-card-header-left">
-              <span className="wa-section-indicator wa-success-indicator">2</span>
-              <span className="wa-card-title">Extracted Output</span>
-            </div>
-
-            <div className="wa-card-actions">
-              {hasOutput && (
-                <>
-                  <button
-                    type="button"
-                    className="wa-btn-primary"
-                    onClick={handleShareToWhatsApp}
-                    title="Send directly to WhatsApp"
-                    style={{
-                      background: 'linear-gradient(135deg, #25d366, #128c7e)',
-                      color: '#ffffff',
-                      fontWeight: 700,
-                      boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)',
-                    }}
-                  >
-                    💬 Share
-                  </button>
-                  <button
-                    type="button"
-                    className={`wa-btn-secondary ${isCopied ? 'copied' : ''}`}
-                    onClick={handleCopy}
-                    title="Copy continuous text to clipboard"
-                  >
-                    {isCopied ? '✓ Copied!' : '📋 Copy'}
-                  </button>
-                  <button
-                    type="button"
-                    className="wa-btn-secondary"
-                    onClick={handleSaveToDiary}
-                    title="Save into your Notebook Text Diary"
-                  >
-                    ✍️ Save
-                  </button>
-                  <button
-                    type="button"
-                    className="wa-btn-secondary"
-                    onClick={handleDownloadTxt}
-                    title="Download as .txt file"
-                  >
-                    📥 .txt
-                  </button>
-                  <button
-                    type="button"
-                    className={`wa-btn-secondary ${isSpeaking ? 'active' : ''}`}
-                    onClick={handleSpeak}
-                    title="Read aloud using Text-to-Speech"
-                  >
-                    {isSpeaking ? '⏹️ Stop' : '🔊 Listen'}
-                  </button>
-                  <button
-                    type="button"
-                    className="wa-btn-bigger-screen"
-                    onClick={() => {
-                      hapticTap();
-                      setIsFullScreenOutput(true);
-                    }}
-                    title="Open output in full screen view (Esc)"
-                  >
-                    <MaximizeIcon size={13} />
-                    <span>⛶ Bigger View</span>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Live Statistics Strip (Compact) */}
-          {hasOutput && outputResult && (
-            <div className="wa-stats-strip">
-              <span className="wa-stat-chip">💬 {outputResult.messageCount} msgs</span>
-              {outputResult.participants.length > 0 && (
-                <span className="wa-stat-chip" title={outputResult.participants.join(', ')}>
-                  👥 {outputResult.participants.length} people
+              <span className="wa-card-title highlight">✨ Clean Extracted Text</span>
+              {hasOutput && outputResult && (
+                <span className="wa-count-tag">
+                  {outputResult.outputWordCount.toLocaleString()} words • ~{readingTimeMins}m read
                 </span>
               )}
-              <span className="wa-stat-chip">📝 {outputResult.outputWordCount.toLocaleString()} words</span>
-              <span className="wa-stat-chip">⏱️ ~{readingTimeMins}m read</span>
-              <span className="wa-stat-chip accent">✨ Dates & senders removed</span>
             </div>
-          )}
 
-          {/* Output Text Area (Balanced height) */}
+            {hasOutput && (
+              <div className="wa-card-actions">
+                <button
+                  type="button"
+                  className="wa-btn-primary wa-btn-share-mobile"
+                  onClick={handleShareToWhatsApp}
+                  title="Send directly to WhatsApp"
+                >
+                  💬 Share
+                </button>
+                <button
+                  type="button"
+                  className={`wa-btn-secondary ${isCopied ? 'copied' : ''}`}
+                  onClick={handleCopy}
+                  title="Copy continuous text to clipboard"
+                >
+                  {isCopied ? '✓ Copied!' : '📋 Copy'}
+                </button>
+                <button
+                  type="button"
+                  className="wa-btn-secondary"
+                  onClick={handleSaveToDiary}
+                  title="Save into your Notebook Text Diary"
+                >
+                  ✍️ Save
+                </button>
+                <button
+                  type="button"
+                  className="wa-btn-bigger-screen"
+                  onClick={() => {
+                    hapticTap();
+                    setIsFullScreenOutput(true);
+                  }}
+                  title="Open output in full screen view"
+                >
+                  <MaximizeIcon size={13} />
+                  <span>⛶ Bigger View</span>
+                </button>
+                <button
+                  type="button"
+                  className={`wa-btn-secondary ${isSpeaking ? 'active' : ''}`}
+                  onClick={handleSpeak}
+                  title="Read aloud"
+                >
+                  {isSpeaking ? '⏹️' : '🔊'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Output Text Area */}
           <div className="wa-textarea-wrapper">
             {hasOutput ? (
               <textarea
@@ -521,48 +431,45 @@ Example:
                 onChange={e => {
                   setOutputResult(prev => (prev ? { ...prev, result: e.target.value } : null));
                 }}
-                rows={8}
+                rows={7}
                 aria-label="Extracted continuous text output"
               />
             ) : (
-              <div className="wa-empty-state">
-                <div className="wa-empty-icon">🪄</div>
-                <div className="wa-empty-title">Ready to Clean WhatsApp Chat</div>
-                <div className="wa-empty-desc">
-                  Paste your WhatsApp chat above or click <strong>Sample Chat</strong> to extract clean continuous text.
-                </div>
-                <button type="button" className="wa-btn-primary small" onClick={handleLoadSample}>
-                  💡 Try With Sample Chat
-                </button>
+              <div className="wa-compact-empty">
+                <span>🪄 Paste your chat above or click <strong>Sample</strong> to extract clean continuous text.</span>
               </div>
             )}
           </div>
 
-          {/* Bottom Quick Action Bar */}
           {hasOutput && (
             <div className="wa-bottom-bar">
               <div className="wa-bottom-note">
-                ✅ Timestamps, dates, and senders removed into continuous text.
+                ✅ Timestamps, dates, and senders removed into clean text.
               </div>
               <div className="wa-bottom-actions">
                 <button
                   type="button"
                   className="wa-btn-secondary"
-                  onClick={() => {
-                    hapticTap();
-                    setIsFullScreenOutput(true);
-                  }}
+                  onClick={handleDownloadTxt}
+                  title="Download .txt"
+                >
+                  📥 .txt
+                </button>
+                <button
+                  type="button"
+                  className="wa-btn-bigger-screen"
+                  onClick={() => setIsFullScreenOutput(true)}
                   title="Expand to Fullscreen Bigger View"
                 >
                   <MaximizeIcon size={14} />
-                  <span>⛶ Bigger View</span>
+                  <span>⛶ Fullscreen</span>
                 </button>
                 <button
                   type="button"
                   className={`wa-btn-primary ${isCopied ? 'copied' : ''}`}
                   onClick={handleCopy}
                 >
-                  {isCopied ? '✓ Copied to Clipboard!' : '📋 Copy Clean Text'}
+                  {isCopied ? '✓ Copied' : '📋 Copy All'}
                 </button>
               </div>
             </div>
@@ -570,220 +477,117 @@ Example:
         </div>
       </div>
 
-      {/* ====================================================================
-          BIGGER SCREEN / FULL-SCREEN OUTPUT MODAL OVERLAY
-          ==================================================================== */}
-      {isFullScreenOutput && hasOutput && (
-        <div
-          className={`wa-fullscreen-overlay wa-fs-theme-${fsTheme}`}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Full-Screen WhatsApp Chat Output"
-        >
-          {/* Top Header Bar */}
-          <header className="wa-fs-header">
+      {/* Bigger Screen (Full-Screen) Modal */}
+      {isFullScreenOutput && outputResult && (
+        <div className="wa-fullscreen-modal" role="dialog" aria-modal="true">
+          <div className="wa-fs-header">
             <div className="wa-fs-header-left">
               <button
                 type="button"
-                className="action-btn back-btn wa-fs-back-btn"
-                onClick={() => {
-                  hapticTap();
-                  setIsFullScreenOutput(false);
-                }}
-                title="Back to Editor (Esc)"
-              >
-                <BackIcon size={16} />
-                <span>Back</span>
-              </button>
-
-              <div className="wa-fs-title-box">
-                <h2 className="wa-fs-title">💬 WhatsApp Extracted Chat</h2>
-                <span className="wa-fs-badge">Bigger Screen</span>
-              </div>
-
-              {outputResult && (
-                <div className="wa-fs-stat-pills">
-                  <span className="wa-fs-pill">📝 {outputResult.outputWordCount.toLocaleString()} words</span>
-                  <span className="wa-fs-pill">💬 {outputResult.messageCount} messages</span>
-                  <span className="wa-fs-pill">📊 {outputResult.outputCharCount.toLocaleString()} chars</span>
-                  <span className="wa-fs-pill">⏱️ ~{readingTimeMins}m read</span>
-                </div>
-              )}
-            </div>
-
-            <div className="wa-fs-header-actions">
-              <button
-                type="button"
-                className="wa-btn-primary"
-                onClick={handleShareToWhatsApp}
-                title="Send directly to WhatsApp"
-                style={{
-                  background: 'linear-gradient(135deg, #25d366, #128c7e)',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  boxShadow: '0 4px 12px rgba(37, 211, 102, 0.35)',
-                }}
-              >
-                💬 Share on WhatsApp
-              </button>
-
-              <button
-                type="button"
-                className={`wa-btn-secondary ${isCopied ? 'copied' : ''}`}
-                onClick={handleCopy}
-                title="Copy continuous text to clipboard"
-              >
-                {isCopied ? '✓ Copied!' : '📋 Copy Text'}
-              </button>
-
-              <button
-                type="button"
-                className="wa-btn-secondary"
-                onClick={handleSaveToDiary}
-                title="Save into your Notebook Text Diary"
-              >
-                ✍️ Save to Diary
-              </button>
-
-              <button
-                type="button"
-                className="wa-btn-secondary"
-                onClick={handleDownloadTxt}
-                title="Download as .txt file"
-              >
-                📥 Download
-              </button>
-
-              <button
-                type="button"
-                className={`wa-btn-secondary ${isSpeaking ? 'active' : ''}`}
-                onClick={handleSpeak}
-                title="Read aloud using Text-to-Speech"
-              >
-                {isSpeaking ? '⏹️ Stop' : '🔊 Listen'}
-              </button>
-
-              <button
-                type="button"
-                className="wa-fs-exit-btn"
-                onClick={() => {
-                  hapticTap();
-                  setIsFullScreenOutput(false);
-                }}
-                title="Exit Full Screen (Esc)"
+                className="wa-fs-close-btn"
+                onClick={() => setIsFullScreenOutput(false)}
+                title="Close bigger view (Esc)"
               >
                 <MinimizeIcon size={16} />
-                <span>Exit Bigger Screen</span>
+                <span>Close</span>
               </button>
-            </div>
-          </header>
-
-          {/* Reading Preferences Toolbar */}
-          <div className="wa-fs-toolbar">
-            <div className="wa-fs-tool-group">
-              <span className="wa-fs-tool-label">Font Size:</span>
-              <button
-                type="button"
-                className="wa-fs-tool-btn"
-                onClick={() => setFsFontSize(s => Math.max(13, s - 2))}
-                title="Decrease font size"
-              >
-                A-
-              </button>
-              <span className="wa-fs-size-display">{fsFontSize}px</span>
-              <button
-                type="button"
-                className="wa-fs-tool-btn"
-                onClick={() => setFsFontSize(s => Math.min(32, s + 2))}
-                title="Increase font size"
-              >
-                A+
-              </button>
+              <div className="wa-fs-meta">
+                <span className="wa-fs-title">📖 WhatsApp Cleaned Text</span>
+                <span className="wa-fs-stats">
+                  {outputResult.outputWordCount.toLocaleString()} words • ~{readingTimeMins} min read
+                </span>
+              </div>
             </div>
 
-            <div className="wa-fs-tool-group">
-              <span className="wa-fs-tool-label">Line Spacing:</span>
-              <button
-                type="button"
-                className={`wa-fs-tool-btn ${fsLineHeight === 'normal' ? 'active' : ''}`}
-                onClick={() => setFsLineHeight('normal')}
-              >
-                Compact
-              </button>
+            <div className="wa-fs-toolbar">
+              {/* Theme Selector */}
+              <div className="wa-fs-theme-selector">
+                {(['default', 'sepia', 'dark', 'focus'] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`wa-fs-theme-btn wa-fs-theme-${t} ${fsTheme === t ? 'active' : ''}`}
+                    onClick={() => {
+                      hapticTap();
+                      setFsTheme(t);
+                    }}
+                    title={`${t} theme`}
+                  >
+                    {t === 'default' ? '🌙' : t === 'sepia' ? '📜' : t === 'dark' ? '⬛' : '🎯'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Font Size Controls */}
+              <div className="wa-fs-btn-group">
+                <button
+                  type="button"
+                  className="wa-fs-tool-btn"
+                  onClick={() => setFsFontSize(s => Math.max(14, s - 2))}
+                  title="Smaller text"
+                >
+                  A-
+                </button>
+                <span className="wa-fs-size-label">{fsFontSize}px</span>
+                <button
+                  type="button"
+                  className="wa-fs-tool-btn"
+                  onClick={() => setFsFontSize(s => Math.min(32, s + 2))}
+                  title="Larger text"
+                >
+                  A+
+                </button>
+              </div>
+
+              {/* Line Height Toggle */}
               <button
                 type="button"
                 className={`wa-fs-tool-btn ${fsLineHeight === 'relaxed' ? 'active' : ''}`}
-                onClick={() => setFsLineHeight('relaxed')}
+                onClick={() => setFsLineHeight(h => (h === 'normal' ? 'relaxed' : 'normal'))}
+                title="Toggle line spacing"
               >
-                Spacious
+                ↕ Spacing
               </button>
-            </div>
 
-            <div className="wa-fs-tool-group">
-              <span className="wa-fs-tool-label">Reading Theme:</span>
+              {/* Action Buttons */}
               <button
                 type="button"
-                className={`wa-fs-tool-btn ${fsTheme === 'default' ? 'active' : ''}`}
-                onClick={() => setFsTheme('default')}
+                className="wa-fs-tool-btn primary"
+                onClick={handleShareToWhatsApp}
+                title="Share to WhatsApp"
+                style={{ background: '#25d366', color: '#fff', border: 'none' }}
               >
-                Standard
+                💬 WhatsApp
               </button>
               <button
                 type="button"
-                className={`wa-fs-tool-btn ${fsTheme === 'sepia' ? 'active' : ''}`}
-                onClick={() => setFsTheme('sepia')}
+                className="wa-fs-tool-btn primary"
+                onClick={handleCopy}
               >
-                📜 Sepia Book
+                {isCopied ? '✓ Copied' : '📋 Copy'}
               </button>
               <button
                 type="button"
-                className={`wa-fs-tool-btn ${fsTheme === 'dark' ? 'active' : ''}`}
-                onClick={() => setFsTheme('dark')}
+                className="wa-fs-tool-btn"
+                onClick={handleSaveToDiary}
+                title="Save as note"
               >
-                🌙 OLED Dark
-              </button>
-              <button
-                type="button"
-                className={`wa-fs-tool-btn ${fsTheme === 'focus' ? 'active' : ''}`}
-                onClick={() => setFsTheme('focus')}
-              >
-                🎯 Clean Paper
+                ✍️ Save
               </button>
             </div>
           </div>
 
-          {/* Massive Editor / Reading Surface */}
-          <div className="wa-fs-editor-area">
+          <div className={`wa-fs-body theme-${fsTheme} line-${fsLineHeight}`}>
             <textarea
               className="wa-fs-textarea"
-              style={{
-                fontSize: `${fsFontSize}px`,
-                lineHeight: fsLineHeight === 'relaxed' ? '1.85' : '1.55',
-              }}
-              value={outputResult?.result || ''}
+              style={{ fontSize: `${fsFontSize}px` }}
+              value={outputResult.result}
               onChange={e => {
                 setOutputResult(prev => (prev ? { ...prev, result: e.target.value } : null));
               }}
-              placeholder="Extracted continuous text..."
-              aria-label="Full-screen continuous WhatsApp chat output"
+              aria-label="Full-screen continuous text editor"
             />
           </div>
-
-          {/* Sticky Fullscreen Footer */}
-          <footer className="wa-fs-footer">
-            <div className="wa-fs-footer-info">
-              ✨ Full continuous text extracted • Timestamps & sender names stripped • Press <kbd>Esc</kbd> or tap Back to return
-            </div>
-            <div className="wa-fs-footer-buttons">
-              <button
-                type="button"
-                className={`wa-btn-primary ${isCopied ? 'copied' : ''}`}
-                onClick={handleCopy}
-              >
-                {isCopied ? '✓ Copied to Clipboard!' : '📋 Copy All Text'}
-              </button>
-            </div>
-          </footer>
         </div>
       )}
     </div>
