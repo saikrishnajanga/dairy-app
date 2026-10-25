@@ -127,6 +127,11 @@ export function useSpeechToText() {
     setState(p => ({ ...p, error, status: status ?? p.status }));
   }, []);
 
+  const clearInterim = useCallback(() => {
+    pendingRef.current = '';
+    setState(p => (p.interimTelugu ? { ...p, interimTelugu: '', interimText: '' } : p));
+  }, []);
+
   /** Merge a final chunk into the transcript. Returns true if anything changed. */
   const commit = useCallback((chunk: string): boolean => {
     const clean = normalizeTranscript(chunk);
@@ -174,11 +179,6 @@ export function useSpeechToText() {
       if (p.interimTelugu === tail) return p;
       return { ...p, interimTelugu: tail, interimText: transliterate(tail) };
     });
-  }, []);
-
-  const clearInterim = useCallback(() => {
-    pendingRef.current = '';
-    setState(p => (p.interimTelugu ? { ...p, interimTelugu: '', interimText: '' } : p));
   }, []);
 
   // ─── Permissions ───────────────────────────────────────────
