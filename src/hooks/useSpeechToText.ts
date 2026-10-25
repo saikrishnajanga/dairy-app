@@ -133,14 +133,21 @@ export function useSpeechToText() {
     if (!clean) return false;
 
     const now = Date.now();
-    // Only guard against rapid identical duplicate event fired within 250ms
-    if (clean === lastFinalChunkRef.current && (now - lastCommitTimeRef.current < 250)) {
+    // Guard against rapid identical duplicate event fired within 800ms
+    if (clean === lastFinalChunkRef.current && (now - lastCommitTimeRef.current < 800)) {
       pendingRef.current = '';
-      setState(p => (p.interimTelugu ? { ...p, interimTelugu: '', interimText: '' } : p));
+      clearInterim();
       return false;
     }
 
     const merged = mergeTranscript(committedRef.current, clean);
+    // If nothing new was added (already absorbed at boundary), exit cleanly
+    if (merged === committedRef.current && committedRef.current.length > 0) {
+      pendingRef.current = '';
+      clearInterim();
+      return false;
+    }
+
     committedRef.current = merged;
     pendingRef.current = '';
     lastFinalChunkRef.current = clean;
@@ -157,7 +164,7 @@ export function useSpeechToText() {
       isEdited: false,
     }));
     return true;
-  }, []);
+  }, [clearInterim]);
 
   /** Show the live (uncommitted) tail without duplicating committed words. */
   const showInterim = useCallback((raw: string) => {
@@ -254,6 +261,9 @@ export function useSpeechToText() {
       if (interim) {
         pendingRef.current = interim;
         showInterim(interim);
+      } else {
+        pendingRef.current = '';
+        clearInterim();
       }
     };
 

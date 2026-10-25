@@ -90,14 +90,18 @@ export default function VoiceRecorder({ onSave }: Props) {
     }
   }, [isEditingTranscript, romanizedText])
 
-  // Auto-resize the edit textarea
+  // Auto-resize the edit textarea without jumping / scrolling up
   useEffect(() => {
     if (editTextareaRef.current && isEditingTranscript) {
-      const ta = editTextareaRef.current
-      ta.style.height = 'auto'
-      ta.style.height = `${ta.scrollHeight}px`
+      const ta = editTextareaRef.current;
+      const prevScroll = window.scrollY || document.documentElement.scrollTop;
+      ta.style.height = 'auto';
+      ta.style.height = `${Math.max(80, ta.scrollHeight)}px`;
+      if (typeof window !== 'undefined' && (window.scrollY || document.documentElement.scrollTop) !== prevScroll) {
+        window.scrollTo(0, prevScroll);
+      }
     }
-  }, [editedRomanText, isEditingTranscript])
+  }, [editedRomanText, isEditingTranscript]);
 
   const handleToggle = useCallback(() => {
     hapticTap()

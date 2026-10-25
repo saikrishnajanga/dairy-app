@@ -44,7 +44,7 @@ const CONSONANT_BASE: Record<string, string> = {
   'చ': 'ch', 'ఛ': 'chh', 'జ': 'j', 'ఝ': 'jh', 'ఞ': 'ny',
   'ట': 't', 'ఠ': 'th', 'డ': 'd', 'ఢ': 'dh', 'ణ': 'n',
   'త': 't', 'థ': 'th', 'ద': 'd', 'ధ': 'dh', 'న': 'n',
-  'ప': 'p', 'ఫ': 'ph', 'బ': 'b', 'భ': 'bh', 'మ': 'm',
+  'ప': 'p', 'ఫ': 'f', 'బ': 'b', 'భ': 'bh', 'మ': 'm',
   'య': 'y', 'ర': 'r', 'ల': 'l', 'వ': 'v', 'ళ': 'l', 'ఱ': 'r',
   'శ': 'sh', 'ష': 'sh', 'స': 's', 'హ': 'h',
 };
@@ -273,6 +273,19 @@ export function transliterate(text: string, options: TransliterateOptions = {}):
     const leading = token.slice(0, token.indexOf(core));
     const trailing = token.slice(leading.length + core.length);
     if (!core) { out.push(token); continue; }
+
+    // If token mixes Latin characters and Telugu script (e.g. "Jediశ్లేల్లాము")
+    if (/[A-Za-z0-9]/.test(core) && TELUGU_RANGE.test(core)) {
+      const segments = core.match(/([A-Za-z0-9]+|[\u0C00-\u0C7F]+|[^\w\u0C00-\u0C7F]+)/g) || [core];
+      const translatedSegs = segments.map(seg => {
+        if (TELUGU_RANGE.test(seg)) {
+          return lookupLoanword(seg) ?? transliterateWord(seg);
+        }
+        return seg;
+      });
+      out.push(leading + translatedSegs.join(' ') + trailing);
+      continue;
+    }
 
     const borrowed = TELUGU_RANGE.test(core) ? lookupLoanword(core) : null;
     out.push(leading + (borrowed ?? transliterateWord(core)) + trailing);

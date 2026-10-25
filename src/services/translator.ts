@@ -57,6 +57,16 @@ export interface TranslationResult {
   source: string;
 }
 
+async function translateChunk(chunk: string, pair: string): Promise<string> {
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=${pair}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data?.responseStatus === 200 && data?.responseData?.translatedText) {
+    return data.responseData.translatedText;
+  }
+  throw new Error(data?.responseDetails || 'Translation failed');
+}
+
 export async function translate(
   text: string,
   sourceLang: string,
@@ -64,19 +74,44 @@ export async function translate(
 ): Promise<TranslationResult> {
   if (!text.trim()) return { translatedText: '', source: '' };
 
-  try {
-    const pair = `${sourceLang}|${targetLang}`;
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${pair}`;
-    const res = await fetch(url);
-    const data = await res.json();
+  const pair = `${sourceLang}|${targetLang}`;
 
-    if (data.responseStatus === 200 && data.responseData) {
-      return {
-        translatedText: data.responseData.translatedText,
-        source: 'MyMemory',
-      };
+  try {
+    // If text is short, translate directly
+    if (text.length <= 400) {
+      const translated = await translateChunk(text, pair);
+      return { translatedText: translated, source: 'MyMemory' };
     }
-    throw new Error(data.responseDetails || 'Translation failed');
+
+    // Split long text by sentences/newlines to respect the 500-char API cap
+    const parts = text.match(/[^.!?\n]+[.!?\n]*|\n+/g) || [text];
+    const chunks: string[] = [];
+    let current = '';
+
+    for (const part of parts) {
+      if ((current + part).length > 380 && current) {
+        chunks.push(current.trim());
+        current = part;
+      } else {
+        current += part;
+      }
+    }
+    if (current.trim()) chunks.push(current.trim());
+
+    const translatedParts: string[] = [];
+    for (const c of chunks) {
+      try {
+        const trans = await translateChunk(c, pair);
+        translatedParts.push(trans);
+      } catch {
+        translatedParts.push(c);
+      }
+    }
+
+    return {
+      translatedText: translatedParts.join(' '),
+      source: 'MyMemory',
+    };
   } catch (err) {
     throw new Error(`Translation error: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }

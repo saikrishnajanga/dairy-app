@@ -4,6 +4,7 @@ import {
   updateTextEntry,
   deleteTextEntry,
   formatMMDDYYYY,
+  resetTextDiaryCache,
 } from '../services/textDiary';
 import { dbSaveDraft, dbGetDraft, dbDeleteDraft } from '../services/db';
 import { subscribeSyncState, type SyncState } from '../services/cloudSync';
@@ -44,7 +45,9 @@ export default function FullScreenEditor({
   const [selectedFontSize, setSelectedFontSize] = useState('16px');
 
   const editorRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wordCountTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
 
   // Sync state listener
@@ -61,6 +64,14 @@ export default function FullScreenEditor({
     const words = text.trim().split(/\s+/).filter(Boolean);
     setWordCount(words.length);
   }, []);
+
+  // Debounced word count to avoid re-rendering header chips on every keystroke
+  const debouncedUpdateWordCount = useCallback(() => {
+    if (wordCountTimeoutRef.current) clearTimeout(wordCountTimeoutRef.current);
+    wordCountTimeoutRef.current = setTimeout(() => {
+      updateWordCount();
+    }, 600);
+  }, [updateWordCount]);
 
   // Initial populate with draft restoration
   useEffect(() => {
@@ -85,18 +96,17 @@ export default function FullScreenEditor({
     return () => { active = false; };
   }, [entry.id, entry.content, entry.title, entry.updatedAt, entry.lastEdited, showToast, updateWordCount]);
 
-  // Debounced Autosave function
+  // Debounced Autosave function (does not mutate React state on every single key press)
   const triggerSave = useCallback(() => {
     if (!editorRef.current) return;
     const currentHtml = editorRef.current.innerHTML;
-
-    setSaveStatus('saving');
 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
     saveTimeoutRef.current = setTimeout(async () => {
+      setSaveStatus('saving');
       try {
         // Save to TextDiary store
         updateTextEntry(entry.id, {
@@ -127,9 +137,25 @@ export default function FullScreenEditor({
     }, 800);
   }, [entry.id, title, entryDate]);
 
-  // Input change handler in editor
+  // Input change handler in editor with caret guard
   const handleContentInput = () => {
-    updateWordCount();
+    // Caret guard: keep caret in view without letting browser scroll up
+    if (scrollAreaRef.current) {
+      try {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          const containerRect = scrollAreaRef.current.getBoundingClientRect();
+          // If caret is near or below the visible container bottom, scroll down slightly
+          // NEVER scroll up!
+          if (rect.bottom > containerRect.bottom - 40) {
+            scrollAreaRef.current.scrollTop += (rect.bottom - containerRect.bottom + 60);
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    debouncedUpdateWordCount();
     triggerSave();
   };
 
@@ -139,7 +165,7 @@ export default function FullScreenEditor({
     triggerSave();
   };
 
-  // Exit editor safely
+  // Exit editor safely and immediately update
   const handleBack = () => {
     hapticTap();
     if (editorRef.current) {
@@ -151,6 +177,7 @@ export default function FullScreenEditor({
       // Clear draft on intentional clean exit
       void dbDeleteDraft(entry.id);
     }
+    resetTextDiaryCache();
     onBack();
   };
 
@@ -492,7 +519,7 @@ export default function FullScreenEditor({
       </header>
 
       {/* Main Writing Canvas */}
-      <main className="editor-scroll-area">
+      <main className="editor-scroll-area" ref={scrollAreaRef}>
         <div className="editor-document-sheet">
           {/* Metadata Row: Entry Date, Word count, Timestamps */}
           <div className="editor-meta-header">

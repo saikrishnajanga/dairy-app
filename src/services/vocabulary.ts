@@ -49,6 +49,17 @@ export const CUSTOM_NAMES: Record<string, string> = {
   'శ్యాం': 'Shyam',
   'శ్రావణ్': 'Sravan',
   'శ్రవణ్': 'Sravan',
+  // Sai & Girish (from user recordings)
+  'సాయి': 'Sai',
+  'సాయికి': 'Sai ki',
+  'సాయిని': 'Sai ni',
+  'సాయిగారు': 'Sai gaaru',
+  'సాయి గారు': 'Sai gaaru',
+  'సాయిగారి': 'Sai gaari',
+  'సాయి గారి': 'Sai gaari',
+  'గిరీశ్': 'Girish',
+  'గిరీష్': 'Girish',
+  'గిరీష': 'Girish',
 };
 
 /**
@@ -57,12 +68,55 @@ export const CUSTOM_NAMES: Record<string, string> = {
  * Value: correct English spelling.
  */
 export const CUSTOM_TERMS: Record<string, string> = {
+  // ─── Spoken Everyday English Words / Actions ───
+  'కూరియర్': 'courier',
+  'కూరియర్స్': 'couriers',
+  'కొరియర్': 'courier',
+  'కొరియర్స్': 'couriers',
+  'రిటర్న్': 'return',
+  'రిటర్నా': 'return aa',
+  'రిటర్ను': 'return',
+  'పార్క్': 'park',
+  'పార్కింగ్': 'parking',
+  'ఫిష్': 'fish',
+  'వమిట్': 'vomit',
+  'వమటి': 'vomit',
+  'వామిట్': 'vomit',
+
+  // ─── Spoken Numbers & Clock Times ───
+  'త్రీ ఫోర్టీ': '3:40',
+  'త్రీ ఫిఫ్టీ': '3:50',
+  'త్రీ థర్టీ': '3:30',
+  'టూ థర్టీ': '2:30',
+  'వన్': 'one',
+  'టూ': 'two',
+  'త్రీ': 'three',
+  'ఫోర్': 'four',
+  'ఫైవ్': 'five',
+  'సిక్స్': 'six',
+  'సెవెన్': 'seven',
+  'ఎయిట్': 'eight',
+  'నైన్': 'nine',
+  'టెన్': 'ten',
+  'ట్వంటీ': 'twenty',
+  'థర్టీ': 'thirty',
+  'ఫోర్టీ': 'forty',
+  'ఫిఫ్టీ': 'fifty',
+  'సిక్స్టీ': 'sixty',
+  'సెవెంటీ': 'seventy',
+  'ఎయిటీ': 'eighty',
+  'నైంటీ': 'ninety',
+  'హండ్రెడ్': 'hundred',
+  'థౌసండ్': 'thousand',
+
   // ─── Brands & Companies ───
   'మైక్రోసాఫ్ట్': 'Microsoft',
   'మైక్రోసాఫ్ట': 'Microsoft',
   'గూగుల్': 'Google',
 
   // ─── Locations ───
+  'చాంపెట్': 'Champet',
+  'చంపాపేట్': 'Champapet',
   'బొటానికల్': 'Botanical',
   'బొటానికల్ గార్డెన్': 'Botanical Garden',
   'డామినోస్': "Domino's",

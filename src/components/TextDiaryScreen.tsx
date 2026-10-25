@@ -15,7 +15,11 @@ import { hapticTap } from '../services/utils';
 import { moveNoteToTrash } from '../services/trash';
 import { TrashIcon } from './Icons';
 
-export default function TextDiaryScreen() {
+interface TextDiaryScreenProps {
+  onOpenEditor?: (entry: TextDiaryEntry) => void;
+}
+
+export default function TextDiaryScreen({ onOpenEditor }: TextDiaryScreenProps = {}) {
   const [entries, setEntries] = useState<TextDiaryEntry[]>([]);
   const [search, setSearch] = useState('');
   const [activeEntry, setActiveEntry] = useState<TextDiaryEntry | null>(null);
@@ -46,12 +50,20 @@ export default function TextDiaryScreen() {
   const handleProceedNewNote = (entryDate: string, title: string) => {
     setShowDatePicker(false);
     const newEntry = createTextEntry(title, '', entryDate);
-    setActiveEntry(newEntry);
+    if (onOpenEditor) {
+      onOpenEditor(newEntry);
+    } else {
+      setActiveEntry(newEntry);
+    }
   };
 
   const handleOpenEntry = (entry: TextDiaryEntry) => {
     hapticTap();
-    setActiveEntry(entry);
+    if (onOpenEditor) {
+      onOpenEditor(entry);
+    } else {
+      setActiveEntry(entry);
+    }
   };
 
   const handleDeleteEntry = (entry: TextDiaryEntry, e: React.MouseEvent) => {

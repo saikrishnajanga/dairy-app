@@ -37,6 +37,7 @@ export default function WhatsAppEnhancerScreen({
   const [isWideLayout, setIsWideLayout] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const enhanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Run enhancement whenever inputs or options change
   const runEnhance = useCallback(
@@ -53,7 +54,13 @@ export default function WhatsAppEnhancerScreen({
   );
 
   useEffect(() => {
-    runEnhance(inputText);
+    if (enhanceTimerRef.current) clearTimeout(enhanceTimerRef.current);
+    enhanceTimerRef.current = setTimeout(() => {
+      runEnhance(inputText);
+    }, 200);
+    return () => {
+      if (enhanceTimerRef.current) clearTimeout(enhanceTimerRef.current);
+    };
   }, [inputText, runEnhance]);
 
   // Support closing Full-Screen Output via Escape key
@@ -231,12 +238,11 @@ export default function WhatsAppEnhancerScreen({
           <div className="wa-badge">
             <span className="wa-badge-dot" />
             <span className="wa-icon">💬</span>
-            <span>WhatsApp Chat Cleaner & Enhancer</span>
+            <span>WhatsApp Chat Cleaner</span>
           </div>
           <h2 className="wa-hero-title">Continuous Chat Extractor</h2>
           <p className="wa-hero-subtitle">
-            Paste any WhatsApp chat export. Automatically strips all dates, timestamps, and
-            sender names, and combines all messages into a single continuous text separated by a space.
+            Strips dates, timestamps, and sender names into clean, continuous readable text.
           </p>
         </div>
 
@@ -261,7 +267,7 @@ export default function WhatsAppEnhancerScreen({
                 setIsWideLayout(true);
               }}
             >
-              ↔️ Wide Screen
+              ↔️ Wide
             </button>
           </div>
 
@@ -345,7 +351,7 @@ Example:
 12/10/2026, 10:46 AM - Priya: Doing great! Let's connect today."
               value={inputText}
               onChange={e => setInputText(e.target.value)}
-              rows={8}
+              rows={5}
               aria-label="WhatsApp chat input"
             />
           </div>
@@ -362,7 +368,7 @@ Example:
                 }}
                 title="Combine all messages into a single continuous text with each message separated by a space"
               >
-                📄 Single Continuous Paragraph
+                📄 Single Flow
               </button>
               <button
                 type="button"
@@ -373,7 +379,7 @@ Example:
                 }}
                 title="Separate each cleaned message onto a new line"
               >
-                📑 Clean Line-by-Line
+                📑 Line by Line
               </button>
             </div>
 
@@ -387,7 +393,7 @@ Example:
                     setRemoveSystem(e.target.checked);
                   }}
                 />
-                <span>Strip WhatsApp System Notices</span>
+                <span>Strip Notices</span>
               </label>
 
               <label className="wa-checkbox-label" title="Ensure each sentence ends with proper punctuation">
@@ -422,36 +428,22 @@ Example:
           <div className="wa-card-header">
             <div className="wa-card-header-left">
               <span className="wa-section-indicator wa-success-indicator">2</span>
-              <span className="wa-card-title">Extracted Continuous Output</span>
+              <span className="wa-card-title">Extracted Output</span>
             </div>
 
             <div className="wa-card-actions">
               {hasOutput && (
                 <>
-                  {/* Dedicated Bigger Screen Button in Header */}
-                  <button
-                    type="button"
-                    className="wa-btn-bigger-screen"
-                    onClick={() => {
-                      hapticTap();
-                      setIsFullScreenOutput(true);
-                    }}
-                    title="Open output in bigger screen / full screen view (Esc)"
-                  >
-                    <MaximizeIcon size={14} />
-                    <span>⛶ Bigger Screen</span>
-                  </button>
-
                   <button
                     type="button"
                     className="wa-btn-primary"
                     onClick={handleShareToWhatsApp}
-                    title="Send directly to WhatsApp chat or contact"
+                    title="Send directly to WhatsApp"
                     style={{
                       background: 'linear-gradient(135deg, #25d366, #128c7e)',
                       color: '#ffffff',
                       fontWeight: 700,
-                      boxShadow: '0 4px 12px rgba(37, 211, 102, 0.35)',
+                      boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)',
                     }}
                   >
                     💬 Share
@@ -488,80 +480,39 @@ Example:
                   >
                     {isSpeaking ? '⏹️ Stop' : '🔊 Listen'}
                   </button>
+                  <button
+                    type="button"
+                    className="wa-btn-bigger-screen"
+                    onClick={() => {
+                      hapticTap();
+                      setIsFullScreenOutput(true);
+                    }}
+                    title="Open output in full screen view (Esc)"
+                  >
+                    <MaximizeIcon size={13} />
+                    <span>⛶ Bigger View</span>
+                  </button>
                 </>
               )}
             </div>
           </div>
 
-          {/* Live Statistics Strip */}
+          {/* Live Statistics Strip (Compact) */}
           {hasOutput && outputResult && (
             <div className="wa-stats-strip">
-              <div className="wa-stat-chip">
-                <span className="wa-stat-icon">💬</span>
-                <span className="wa-stat-value">{outputResult.messageCount}</span>
-                <span className="wa-stat-label">Messages</span>
-              </div>
+              <span className="wa-stat-chip">💬 {outputResult.messageCount} msgs</span>
               {outputResult.participants.length > 0 && (
-                <div className="wa-stat-chip" title={outputResult.participants.join(', ')}>
-                  <span className="wa-stat-icon">👥</span>
-                  <span className="wa-stat-value">{outputResult.participants.length}</span>
-                  <span className="wa-stat-label">Participants</span>
-                </div>
+                <span className="wa-stat-chip" title={outputResult.participants.join(', ')}>
+                  👥 {outputResult.participants.length} people
+                </span>
               )}
-              <div className="wa-stat-chip">
-                <span className="wa-stat-icon">📝</span>
-                <span className="wa-stat-value">{outputResult.outputWordCount.toLocaleString()}</span>
-                <span className="wa-stat-label">Words</span>
-              </div>
-              <div className="wa-stat-chip">
-                <span className="wa-stat-icon">📊</span>
-                <span className="wa-stat-value">{outputResult.outputCharCount.toLocaleString()}</span>
-                <span className="wa-stat-label">Chars</span>
-              </div>
-              {outputResult.systemNoticesRemoved > 0 && (
-                <div className="wa-stat-chip">
-                  <span className="wa-stat-icon">🧹</span>
-                  <span className="wa-stat-value">{outputResult.systemNoticesRemoved}</span>
-                  <span className="wa-stat-label">System notices cleaned</span>
-                </div>
-              )}
-              <div className="wa-stat-chip accent">
-                <span className="wa-stat-icon">✨</span>
-                <span className="wa-stat-label">Dates, times & senders removed</span>
-              </div>
+              <span className="wa-stat-chip">📝 {outputResult.outputWordCount.toLocaleString()} words</span>
+              <span className="wa-stat-chip">⏱️ ~{readingTimeMins}m read</span>
+              <span className="wa-stat-chip accent">✨ Dates & senders removed</span>
             </div>
           )}
 
-          {/* Prompt banner for Bigger Screen view */}
-          {hasOutput && (
-            <div
-              className="wa-output-toolbar-strip"
-              onClick={() => {
-                hapticTap();
-                setIsFullScreenOutput(true);
-              }}
-              style={{ cursor: 'pointer' }}
-              title="Click to view output on a bigger screen"
-            >
-              <div className="wa-output-hint">
-                <span>📖 Output Ready ({outputResult?.outputWordCount.toLocaleString()} words • ~{readingTimeMins}m read)</span>
-              </div>
-              <button
-                type="button"
-                className="wa-expand-banner-btn"
-                onClick={e => {
-                  e.stopPropagation();
-                  hapticTap();
-                  setIsFullScreenOutput(true);
-                }}
-              >
-                <MaximizeIcon size={13} />
-                <span>⛶ Open in Bigger Screen View</span>
-              </button>
-            </div>
-          )}
-
-          {/* Output Text Area (Now larger with 14 rows) */}
+          {/* Output Text Area (Balanced height) */}
           <div className="wa-textarea-wrapper">
             {hasOutput ? (
               <textarea
@@ -570,16 +521,15 @@ Example:
                 onChange={e => {
                   setOutputResult(prev => (prev ? { ...prev, result: e.target.value } : null));
                 }}
-                rows={13}
+                rows={8}
                 aria-label="Extracted continuous text output"
               />
             ) : (
               <div className="wa-empty-state">
                 <div className="wa-empty-icon">🪄</div>
-                <div className="wa-empty-title">Ready to Enhance WhatsApp Chat</div>
+                <div className="wa-empty-title">Ready to Clean WhatsApp Chat</div>
                 <div className="wa-empty-desc">
-                  Paste your WhatsApp chat above or click <strong>Sample Chat</strong> to see all timestamps,
-                  dates, and sender names removed into a clean continuous text.
+                  Paste your WhatsApp chat above or click <strong>Sample Chat</strong> to extract clean continuous text.
                 </div>
                 <button type="button" className="wa-btn-primary small" onClick={handleLoadSample}>
                   💡 Try With Sample Chat
@@ -592,9 +542,9 @@ Example:
           {hasOutput && (
             <div className="wa-bottom-bar">
               <div className="wa-bottom-note">
-                ✅ All timestamps, dates, and senders removed into one continuous paragraph.
+                ✅ Timestamps, dates, and senders removed into continuous text.
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="wa-bottom-actions">
                 <button
                   type="button"
                   className="wa-btn-secondary"
@@ -605,14 +555,14 @@ Example:
                   title="Expand to Fullscreen Bigger View"
                 >
                   <MaximizeIcon size={14} />
-                  <span>⛶ Bigger Screen</span>
+                  <span>⛶ Bigger View</span>
                 </button>
                 <button
                   type="button"
                   className={`wa-btn-primary ${isCopied ? 'copied' : ''}`}
                   onClick={handleCopy}
                 >
-                  {isCopied ? '✓ Copied to Clipboard!' : '📋 Copy Extracted Content'}
+                  {isCopied ? '✓ Copied to Clipboard!' : '📋 Copy Clean Text'}
                 </button>
               </div>
             </div>

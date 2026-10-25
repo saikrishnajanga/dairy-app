@@ -43,6 +43,7 @@ import { isSupabaseConfigured } from './services/supabase';
 import { exportVoiceEntriesDocx } from './services/docExport';
 import { getNotifications, subscribeNotificationCount } from './services/notifications';
 import { hapticTap } from './services/utils';
+import { App as CapacitorApp } from '@capacitor/app';
 import type { AuthChangeEvent } from '@supabase/supabase-js';
 
 export type Tab = 'home' | 'voice' | 'diary' | 'locked' | 'documents' | 'whatsapp' | 'telugu_converter' | 'translate' | 'profile' | 'trash';
@@ -136,6 +137,8 @@ export default function App() {
   }, []);
 
   const loadEntries = useCallback(() => {
+    resetEntriesCache();
+    resetTextDiaryCache();
     let data = searchQuery ? searchEntries(searchQuery) : getEntries();
     if (showFavOnly) data = data.filter(e => e.favorite);
     setEntries(sortNewest ? data : [...data].reverse());
@@ -151,6 +154,123 @@ export default function App() {
     loadEntriesRef.current = loadEntries;
     toastRef.current = toast;
   }, [loadEntries, toast]);
+
+  const tabRef = useRef(tab);
+  const activeEditorEntryRef = useRef(activeEditorEntry);
+  const showNotificationPanelRef = useRef(showNotificationPanel);
+  const showDatePickerRef = useRef(showDatePicker);
+  const showMoreMenuRef = useRef(showMoreMenu);
+  const showAuthModalRef = useRef(showAuthModal);
+  const showResetPasswordModalRef = useRef(showResetPasswordModal);
+  const showProfilesRef = useRef(showProfiles);
+
+  useEffect(() => {
+    tabRef.current = tab;
+    activeEditorEntryRef.current = activeEditorEntry;
+    showNotificationPanelRef.current = showNotificationPanel;
+    showDatePickerRef.current = showDatePicker;
+    showMoreMenuRef.current = showMoreMenu;
+    showAuthModalRef.current = showAuthModal;
+    showResetPasswordModalRef.current = showResetPasswordModal;
+    showProfilesRef.current = showProfiles;
+  }, [tab, activeEditorEntry, showNotificationPanel, showDatePicker, showMoreMenu, showAuthModal, showResetPasswordModal, showProfiles]);
+
+  // ─── Mobile Hardware Back Button & Browser Back Handler ─────
+  useEffect(() => {
+    let removeListener: (() => void) | null = null;
+
+    const setupBackHandler = async () => {
+      try {
+        const handler = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+          // 1. If FullScreenEditor is open: save, close, refresh and toast
+          if (activeEditorEntryRef.current) {
+            setActiveEditorEntry(null);
+            resetTextDiaryCache();
+            resetEntriesCache();
+            loadEntriesRef.current();
+            toastRef.current.show('💾 Note updated & saved');
+            return;
+          }
+
+          // 2. If any modal / drawer is open: close it cleanly
+          if (showNotificationPanelRef.current) {
+            setShowNotificationPanel(false);
+            return;
+          }
+          if (showDatePickerRef.current) {
+            setShowDatePicker(false);
+            return;
+          }
+          if (showMoreMenuRef.current) {
+            setShowMoreMenu(false);
+            return;
+          }
+          if (showAuthModalRef.current) {
+            setShowAuthModal(false);
+            return;
+          }
+          if (showResetPasswordModalRef.current) {
+            setShowResetPasswordModal(false);
+            return;
+          }
+          if (showProfilesRef.current) {
+            setShowProfiles(false);
+            return;
+          }
+
+          // 3. If on a sub-tab: go back to home and update view
+          if (tabRef.current !== 'home') {
+            setTab('home');
+            resetTextDiaryCache();
+            resetEntriesCache();
+            loadEntriesRef.current();
+            return;
+          }
+
+          // 4. On home tab: exit or minimize
+          if (!canGoBack) {
+            CapacitorApp.exitApp();
+          } else {
+            window.history.back();
+          }
+        });
+
+        removeListener = () => {
+          handler.remove();
+        };
+      } catch {
+        // Running in non-Capacitor environment
+      }
+    };
+
+    void setupBackHandler();
+
+    const handlePopState = () => {
+      if (activeEditorEntryRef.current) {
+        setActiveEditorEntry(null);
+        resetTextDiaryCache();
+        resetEntriesCache();
+        loadEntriesRef.current();
+        toastRef.current.show('💾 Note updated & saved');
+      } else if (showNotificationPanelRef.current) {
+        setShowNotificationPanel(false);
+      } else if (showMoreMenuRef.current) {
+        setShowMoreMenu(false);
+      } else if (tabRef.current !== 'home') {
+        setTab('home');
+        resetTextDiaryCache();
+        resetEntriesCache();
+        loadEntriesRef.current();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      if (removeListener) removeListener();
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   const handleProfileChanged = useCallback(() => {
     resetEntriesCache();
@@ -377,10 +497,15 @@ export default function App() {
         entry={activeEditorEntry}
         onBack={() => {
           setActiveEditorEntry(null);
+          resetTextDiaryCache();
+          resetEntriesCache();
           loadEntries();
+          toast.show('💾 Note updated & saved');
         }}
         onDelete={() => {
           setActiveEditorEntry(null);
+          resetTextDiaryCache();
+          resetEntriesCache();
           loadEntries();
         }}
         showToast={toast.show}
@@ -971,13 +1096,23 @@ export default function App() {
           {/* TAB 2: Dedicated Voice Journal */}
           {tab === 'voice' && (
             <VoiceJournalScreen
-              onBack={() => setTab('home')}
+              onBack={() => {
+                resetEntriesCache();
+                resetTextDiaryCache();
+                setTab('home');
+                loadEntries();
+              }}
               showToast={toast.show}
             />
           )}
 
           {/* TAB 3: Text Diary / Notebook */}
-          {tab === 'diary' && <TextDiaryScreen key={activeProfile?.id ?? 'no-profile'} />}
+          {tab === 'diary' && (
+            <TextDiaryScreen
+              key={activeProfile?.id ?? 'no-profile'}
+              onOpenEditor={(entry) => setActiveEditorEntry(entry)}
+            />
+          )}
 
           {/* TAB 4: Locked Vault */}
           {tab === 'locked' && (
@@ -1004,15 +1139,29 @@ export default function App() {
             <WhatsAppEnhancerScreen
               key={activeProfile?.id ?? 'no-profile'}
               showToast={toast.show}
-              onNavigateToDiary={() => setTab('diary')}
-              onBack={() => setTab('home')}
+              onNavigateToDiary={() => {
+                resetTextDiaryCache();
+                setTab('diary');
+                loadEntries();
+              }}
+              onBack={() => {
+                resetEntriesCache();
+                resetTextDiaryCache();
+                setTab('home');
+                loadEntries();
+              }}
             />
           )}
 
           {/* TAB 8: Telugu Words (Speech to Romanized Text Converter) */}
           {tab === 'telugu_converter' && (
             <TeluguUniversalConverter
-              onBack={() => setTab('home')}
+              onBack={() => {
+                resetEntriesCache();
+                resetTextDiaryCache();
+                setTab('home');
+                loadEntries();
+              }}
               onSendToDiary={(teluguText, romanizedText) => {
                 handleSave(teluguText, romanizedText);
               }}
@@ -1030,7 +1179,12 @@ export default function App() {
               onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
               onPaletteChange={(p) => setPalette(p)}
               onSignOut={handleSignOut}
-              onBack={() => setTab('home')}
+              onBack={() => {
+                resetEntriesCache();
+                resetTextDiaryCache();
+                setTab('home');
+                loadEntries();
+              }}
               showToast={toast.show}
               onSwitchProfile={() => setShowProfiles(true)}
               onOpenAuthModal={() => setShowAuthModal(true)}
@@ -1045,7 +1199,12 @@ export default function App() {
           {/* TAB 10: Recycle Bin / Trash */}
           {tab === 'trash' && (
             <TrashScreen
-              onBack={() => setTab('home')}
+              onBack={() => {
+                resetEntriesCache();
+                resetTextDiaryCache();
+                setTab('home');
+                loadEntries();
+              }}
               showToast={toast.show}
             />
           )}

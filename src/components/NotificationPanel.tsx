@@ -111,19 +111,27 @@ export default function NotificationPanel({ isOpen, onClose, showToast }: Props)
       <div className="notification-drawer" onClick={e => e.stopPropagation()}>
         <div className="notif-header">
           <div className="notif-header-title-row">
-            <div className="notif-header-left">
-              <button
-                type="button"
-                className="notif-back-btn"
-                onClick={handleBack}
-                title="Go back"
-                aria-label="Go back"
-              >
-                <BackIcon size={16} />
-                <span>Back</span>
-              </button>
-              <h3 className="notif-title">🔔 Notifications</h3>
-            </div>
+            <button
+              type="button"
+              className="notif-back-btn"
+              onClick={handleBack}
+              title="Go back"
+              aria-label="Go back"
+            >
+              <BackIcon size={16} />
+              <span className="notif-back-btn-text">Back</span>
+            </button>
+
+            <h3 className="notif-title">
+              <span className="notif-title-bell">🔔</span>
+              <span className="notif-title-name">Notifications</span>
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="notif-header-unread-badge">
+                  {notifications.filter(n => !n.read).length}
+                </span>
+              )}
+            </h3>
+
             <button
               type="button"
               className="notif-close-btn"
